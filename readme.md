@@ -1,5 +1,6 @@
 QR code generation from scratch in C++
 [Reference](https://www.thonky.com/qr-code-tutorial)
+https://zavier-henry.medium.com/an-introductory-walkthrough-for-encoding-qr-codes-5a33e1e882b5
 
 Step 1 - Data analysis:
 - figure out which encoding scheme to use
