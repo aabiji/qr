@@ -5,19 +5,6 @@
 #include "utils.h"
 #include "tables.h"
 
-enum ErrorCorrectionLevel {
-  LOW = 1,      // Recovers 7% of data
-  MEDIUM = 2,   // Recovers 15% of data
-  QUANTILE = 3, // Recovers 25% of data
-  HIGH = 3,     // Recovers 30% of data
-};
-
-enum EncodingScheme {
-  NUMERIC = 1,
-  ALPHA_NUMERIC = 2,
-  BYTE = 3,
-};
-
 EncodingScheme getOptimalEncodingScheme(std::string str) {
   int numCount = 0;
   int lowerCaseCount = 0;
@@ -53,11 +40,11 @@ BitSet encodeAlphaNumeric(std::string input) {
     uint16_t value = 0;
     if (i + 1 < size) {
       // Compute pair of characters
-      int first = alphaNumericValues[input[i]];
-      int last = alphaNumericValues[input[i + 1]];
+      int first = alphaNumericValues.at(input[i]);
+      int last = alphaNumericValues.at(input[i + 1]);
       value = 45 * first + last;
     } else {
-      value = alphaNumericValues[input[i]];
+      value = alphaNumericValues.at(input[i]);
       numBits = 6;
     }
 
@@ -137,8 +124,6 @@ void QR::create() {
       bits = encodeByteMode(mInput);
       break;
   }
-  std::cout << scheme << "\n";
-  bits.toString();
 }
 
 void test() {
