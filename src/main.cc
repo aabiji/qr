@@ -1,45 +1,16 @@
 #include <iostream>
-#include <string>
-#include <cstdint>
 #include <cmath>
-#include <vector>
-#include <unordered_map>
 #include <cassert>
 
-template <class T>
-bool contains(T* arr, T v, int size) {
-  for (int i = 0; i < size; i++) {
-    if (arr[i] == v) return true;
-  }
-  return false;
-}
+#include "utils.h"
+#include "tables.h"
 
-// Dynamically sized qr specific bitset
-class BitSet {
-public:
-  void append(bool bit);
-  std::string toString();
-  std::vector<uint8_t> toStream();
-private:
-  std::vector<bool> bits;
+enum ErrorCorrectionLevel {
+  LOW = 1,      // Recovers 7% of data
+  MEDIUM = 2,   // Recovers 15% of data
+  QUANTILE = 3, // Recovers 25% of data
+  HIGH = 3,     // Recovers 30% of data
 };
-
-void BitSet::append(bool bit) {
-  bits.push_back(bit);
-}
-
-std::string BitSet::toString() {
-  std::string str = "";
-  for (bool b : bits) {
-    str += b ? "1" : "0";
-  }
-  return str;
-}
-
-std::vector<uint8_t> BitSet::toStream() {
-  std::vector<uint8_t> empty;
-  return empty;
-}
 
 enum EncodingScheme {
   NUMERIC = 1,
@@ -51,12 +22,14 @@ EncodingScheme getOptimalEncodingScheme(std::string str) {
   int numCount = 0;
   int lowerCaseCount = 0;
   int specialCharCount = 0;
-  char special[] = {' ', '$', '%', '*', '+', '-', '.', '/', ':'};
-  for (char c : str) {
-    if (c >= 48 && c <= 57) {
+  uint32_t special[] = {' ', '$', '%', '*', '+', '-', '.', '/', ':'};
+
+  for (auto it = str.begin(); it != str.end();) {
+    uint32_t codepoint = utf8::next(it, str.end());
+    if (codepoint >= 48 && codepoint <= 57) {
       numCount += 1;
-    } else if ((c >= 65 && c <= 90) ||
-               contains(special, c, 9)) {
+    } else if ((codepoint >= 65 && codepoint <= 90) ||
+               contains(special, codepoint, 9)) {
       specialCharCount += 1;
     } else {
       lowerCaseCount += 1;
@@ -70,17 +43,6 @@ EncodingScheme getOptimalEncodingScheme(std::string str) {
   }
   return EncodingScheme::ALPHA_NUMERIC;
 }
-
-static std::unordered_map<char, int> alphaNumericValues = {
-  {'0',  0}, {'1',  1}, {'2',  2}, {'3',  3}, {'4',  4}, {'5',  5},
-  {'6',  6}, {'7',  7}, {'8',  8}, {'9',  9}, {'A', 10}, {'B', 11},
-  {'C', 12}, {'D', 13}, {'E', 14}, {'F', 15}, {'G', 16}, {'H', 17},
-  {'I', 18}, {'J', 19}, {'K', 20}, {'L', 21}, {'M', 22}, {'N', 23},
-  {'O', 24}, {'P', 25}, {'Q', 26}, {'R', 27}, {'S', 28}, {'T', 29},
-  {'U', 30}, {'V', 31}, {'W', 32}, {'X', 33}, {'Y', 34}, {'Z', 35},
-  {' ', 36}, {'$', 37}, {'%', 38}, {'*', 39}, {'+', 40}, {'-', 41},
-  {'.', 42}, {'/', 43}, {':', 44}
-};
 
 BitSet encodeAlphaNumeric(std::string input) {
   BitSet bits;
@@ -135,24 +97,47 @@ BitSet encodeNumeric(std::string input) {
   return bitset;
 }
 
+BitSet encodeByteMode(std::string input) {
+  BitSet bitset;
+  const char *bytes = input.c_str();
+  for (int i = 0; i < input.length(); i++) {
+    for (int j = 7; j >= 0; j--) {
+      bool bit = (bytes[i] & (1 << j)) >> j;
+      bitset.append(bit);
+    }
+  }
+  return bitset;
+}
+
 class QR {
 public:
   QR(std::string input);
   void create();
 private:
   std::string mInput;
+  int mInputSize;
 };
 
 QR::QR(std::string input) {
   mInput = input;
+  mInputSize = utf8::distance(input.begin(), input.end());
 }
 
 void QR::create() {
   BitSet bits;
   EncodingScheme scheme = getOptimalEncodingScheme(mInput);
-  if (scheme == EncodingScheme::NUMERIC) {
-    bits = encodeNumeric(mInput);
+  switch (scheme) {
+    case EncodingScheme::NUMERIC:
+      bits = encodeNumeric(mInput);
+      break;
+    case EncodingScheme::ALPHA_NUMERIC:
+      bits = encodeAlphaNumeric(mInput);
+      break;
+    case EncodingScheme::BYTE:
+      bits = encodeByteMode(mInput);
+      break;
   }
+  std::cout << scheme << "\n";
   bits.toString();
 }
 
@@ -186,6 +171,15 @@ void test() {
 
   BitSet bits5 = encodeAlphaNumeric("HELLO WORLD");
   assert(bits5.toString() == "0110000101101111000110100010111001011011100010011010100001101");
+
+  BitSet bits6 = encodeByteMode("Hello");
+  assert(bits6.toString() == "0100100001100101011011000110110001101111");
+
+  QR qr1("HELLO");
+  qr1.create();
+
+  QR qr2("🤡");
+  qr2.create();
 }
 
 int main() {
