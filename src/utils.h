@@ -30,22 +30,22 @@ int nextMultiple(int start, int multiple) {
   if (start % multiple) {
     return start + (multiple - start % multiple);
   }
-  return start; // Already a multiple
+  return start;
 }
 
 // Dynamically sized qr specific bitset
 // TODO: make it more efficient
-class BitSet {
+class BitStream {
 public:
-  BitSet() {}
+  BitStream() {}
 
-  BitSet(std::string from) {
+  BitStream(std::string from) {
     for (char c : from) {
       append(c == '0' ? 0 : 1);
     }
   }
 
-  BitSet(uint8_t byte) {
+  BitStream(uint8_t byte) {
     for (int i = 7; i >= 0; i--) {
       bool bit = (byte & (1 << i)) >> i;
       mBits.push_back(bit);
@@ -66,7 +66,7 @@ public:
     mBits = pad;
   }
 
-  friend BitSet operator+(BitSet lhs, const BitSet& rhs) {
+  friend BitStream operator+(BitStream lhs, const BitStream& rhs) {
     lhs.mBits.insert(lhs.mBits.end(), rhs.mBits.begin(), rhs.mBits.end());
     return lhs;
   }
