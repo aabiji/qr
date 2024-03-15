@@ -5,7 +5,7 @@
 #include "utils.h"
 #include "tables.h"
 
-EncodingScheme getOptimalEncodingScheme(std::string str) {
+EncodingMode getOptimalEncodingScheme(std::string str) {
   int numCount = 0;
   int lowerCaseCount = 0;
   int specialCharCount = 0;
@@ -24,11 +24,24 @@ EncodingScheme getOptimalEncodingScheme(std::string str) {
   }
 
   if (lowerCaseCount > 0) {
-    return EncodingScheme::BYTE;
+    return EncodingMode::BYTE;
   } else if (numCount == (numCount + specialCharCount)) {
-    return EncodingScheme::NUMERIC;
+    return EncodingMode::NUMERIC;
   }
-  return EncodingScheme::ALPHA_NUMERIC;
+  return EncodingMode::ALPHA_NUMERIC;
+}
+
+int findSmallestVersion(int count, ErrorCorrection l, EncodingMode m) {
+  int version = 0;
+  while (true) {
+    int capacity = characterCapacities[version][l][m];
+    if (count < capacity) {
+      break;
+    }
+    version ++;
+    count -= capacity;
+  }
+  return version + 1;
 }
 
 BitSet encodeAlphaNumeric(std::string input) {
@@ -98,49 +111,109 @@ BitSet encodeByteMode(std::string input) {
 
 class QR {
 public:
-  QR(std::string input);
+  QR(std::string input, ErrorCorrection level);
   void create();
 private:
   std::string mInput;
-  int mInputSize;
+  int mCharCount;
+  EncodingMode mMode;
+  ErrorCorrection mLevel;
+  int mVersion;
+  int mSize;
+
+  void encodeData();
 };
 
-QR::QR(std::string input) {
+QR::QR(std::string input, ErrorCorrection level) {
   mInput = input;
-  mInputSize = utf8::distance(input.begin(), input.end());
+  mLevel = level;
+  mCharCount = utf8::distance(input.begin(), input.end());
+  mMode = getOptimalEncodingScheme(mInput);
+  mVersion = findSmallestVersion(mCharCount, mLevel, mMode);
+  mSize = 25 + 4 * (mVersion - 1);
 }
 
-void QR::create() {
-  BitSet bits;
-  EncodingScheme scheme = getOptimalEncodingScheme(mInput);
-  switch (scheme) {
-    case EncodingScheme::NUMERIC:
-      bits = encodeNumeric(mInput);
+void QR::encodeData() {
+  BitSet data;
+  switch (mMode) {
+    case EncodingMode::NUMERIC:
+      data = encodeNumeric(mInput);
       break;
-    case EncodingScheme::ALPHA_NUMERIC:
-      bits = encodeAlphaNumeric(mInput);
+    case EncodingMode::ALPHA_NUMERIC:
+      data = encodeAlphaNumeric(mInput);
       break;
-    case EncodingScheme::BYTE:
-      bits = encodeByteMode(mInput);
+    case EncodingMode::BYTE:
+      data = encodeByteMode(mInput);
       break;
+  }
+
+  // Mode indicator bits for the encoding mode used
+  std::string modeIndicators[3] = {"0001", "0010", "0100"};
+  BitSet indicator(modeIndicators[mMode]);
+
+  // Character count bits
+  int index = 0;
+  if (mVersion >= 1 && mVersion <= 9) {
+    index = 0;
+  } else if (mVersion >= 10 && mVersion <= 26) {
+    index = 1;
+  } else if (mVersion >= 27 && mVersion <= 40) {
+    index = 2;
+  }
+  int length = characterIndicatorLengths[index][mMode];
+  BitSet count(mCharCount);
+  count.padLeft(length);
+
+  BitSet bits = indicator + count + data;
+  int maxBits = errorCorrectionInfo[mVersion - 1][mLevel][0] * 8;
+
+  // The terminator can be at most 4 bits
+  int terminatorLength = 4;
+  if (bits.length() + terminatorLength > maxBits) {
+    terminatorLength = (bits.length() + terminatorLength) - maxBits;
+  }
+  for (int i = 0; i < terminatorLength; i++) {
+    bits.append(0);
+  }
+
+  // Pad to ensure the bitset is a multiple of 8
+  int needed = nextMultiple(bits.length(), 8) - bits.length();
+  for (int i = 0; i < needed; i++) {
+    bits.append(0);
+  }
+
+  int remaining = (maxBits - bits.length()) / 8;
+  // Pad the bitstream with alternating bytes to make the bitset the required size
+  for (int i = 0; i < remaining; i++) {
+    if (i % 2 == 0) {
+      BitSet pad(236);
+      bits = bits + pad;
+    } else {
+      BitSet pad(17);
+      bits = bits + pad;
+    }
   }
 }
 
+void QR::create() {
+  encodeData();
+}
+
 void test() {
-  EncodingScheme s1 = getOptimalEncodingScheme("123");
-  assert(s1 == EncodingScheme::NUMERIC);
+  EncodingMode s1 = getOptimalEncodingScheme("123");
+  assert(s1 == EncodingMode::NUMERIC);
 
-  EncodingScheme s2 = getOptimalEncodingScheme("hello");
-  assert(s2 == EncodingScheme::BYTE);
+  EncodingMode s2 = getOptimalEncodingScheme("hello");
+  assert(s2 == EncodingMode::BYTE);
 
-  EncodingScheme s3 = getOptimalEncodingScheme("YO!");
-  assert(s3 == EncodingScheme::BYTE);
+  EncodingMode s3 = getOptimalEncodingScheme("YO!");
+  assert(s3 == EncodingMode::BYTE);
 
-  EncodingScheme s4 = getOptimalEncodingScheme("Yo123");
-  assert(s4 == EncodingScheme::BYTE);
+  EncodingMode s4 = getOptimalEncodingScheme("Yo123");
+  assert(s4 == EncodingMode::BYTE);
 
-  EncodingScheme s5 = getOptimalEncodingScheme("HELLO WORLD");
-  assert(s5 == EncodingScheme::ALPHA_NUMERIC);
+  EncodingMode s5 = getOptimalEncodingScheme("HELLO WORLD");
+  assert(s5 == EncodingMode::ALPHA_NUMERIC);
 
   BitSet bits1 = encodeNumeric("8675309");
   assert(bits1.toString() == "110110001110000100101001");
@@ -160,11 +233,14 @@ void test() {
   BitSet bits6 = encodeByteMode("Hello");
   assert(bits6.toString() == "0100100001100101011011000110110001101111");
 
-  QR qr1("HELLO");
+  QR qr1("HELLO WORLD", ErrorCorrection::QUANTILE);
   qr1.create();
 
-  QR qr2("🤡");
+  QR qr2("🤡", ErrorCorrection::LOW);
   qr2.create();
+
+  QR qr3("abcdefghijklmopqrstuvwxyz", ErrorCorrection::LOW);
+  qr3.create();
 }
 
 int main() {

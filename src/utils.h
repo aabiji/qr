@@ -1,3 +1,5 @@
+#pragma once
+
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -23,20 +25,63 @@ bool contains(T* arr, T v, int size) {
   return false;
 }
 
+// Get the next multiple of a number after start number
+int nextMultiple(int start, int multiple) {
+  if (start % multiple) {
+    return start + (multiple - start % multiple);
+  }
+  return start; // Already a multiple
+}
+
 // Dynamically sized qr specific bitset
+// TODO: make it more efficient
 class BitSet {
 public:
+  BitSet() {}
+
+  BitSet(std::string from) {
+    for (char c : from) {
+      append(c == '0' ? 0 : 1);
+    }
+  }
+
+  BitSet(uint8_t byte) {
+    for (int i = 7; i >= 0; i--) {
+      bool bit = (byte & (1 << i)) >> i;
+      mBits.push_back(bit);
+    }
+  }
+
   void append(bool bit) {
-    bits.push_back(bit);
+    mBits.push_back(bit);
+  }
+
+  // Pad left to meet the target size
+  void padLeft(int targetSize) {
+    if (targetSize <= mBits.size()) {
+      return;
+    }
+    std::vector<bool> pad(targetSize - mBits.size(), 0);
+    pad.insert(pad.end(), mBits.begin(), mBits.end());
+    mBits = pad;
+  }
+
+  friend BitSet operator+(BitSet lhs, const BitSet& rhs) {
+    lhs.mBits.insert(lhs.mBits.end(), rhs.mBits.begin(), rhs.mBits.end());
+    return lhs;
   }
 
   std::string toString() {
     std::string str = "";
-    for (bool b : bits) {
+    for (bool b : mBits) {
       str += b ? "1" : "0";
     }
     return str;
   }
+
+  int length() {
+    return mBits.size();
+  }
 private:
-  std::vector<bool> bits;
+  std::vector<bool> mBits;
 };
