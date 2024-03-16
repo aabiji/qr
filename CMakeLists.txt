@@ -1,11 +1,12 @@
 cmake_minimum_required(VERSION 3.25)
-
-project(
-  qr
-  LANGUAGES CXX)
-
+project(qr LANGUAGES CXX)
 set(CMAKE_CURRENT_SOURCE_DIR src)
 
+# Main executable
+add_executable(qr-bin src/main.cc)
+target_include_directories(qr-bin PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/deps/utfcpp)
+
+# Test executable
 include(FetchContent)
 FetchContent_Declare(
   googletest
@@ -16,10 +17,9 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 enable_testing()
-
-add_executable(qr-bin src/main.cc)
-target_link_libraries(qr-bin GTest::gtest_main)
-target_include_directories(qr-bin PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/deps/utfcpp)
+add_executable(qr-tests src/tests.cc)
+target_link_libraries(qr-tests GTest::gtest_main)
+target_include_directories(qr-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/deps/utfcpp)
 
 include(GoogleTest)
-gtest_discover_tests(qr-bin)
+gtest_discover_tests(qr-tests)

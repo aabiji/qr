@@ -5,6 +5,8 @@ https://zavier-henry.medium.com/an-introductory-walkthrough-for-encoding-qr-code
 https://ntrs.nasa.gov/api/citations/19900019023/downloads/19900019023.pdf
 https://tomverbeure.github.io/2022/08/07/Reed-Solomon.html
 https://pythonhosted.org/PyQRCode/tables.html#pyqrcode.tables.eccwbi
+https://innovation.vivint.com/introduction-to-reed-solomon-bc264d0794f8
+https://en.wikiversity.org/wiki/Reed%E2%80%93Solomon_codes_for_coders
 
 Step 1 - Data analysis:
 - figure out which encoding scheme to use

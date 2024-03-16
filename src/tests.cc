@@ -1,6 +1,11 @@
+#include "utils.h"
+#include "tables.h"
+
 #include <iostream>
 #include <cmath>
 #include <cassert>
+
+#include <gtest/gtest.h>
 
 #include "utils.h"
 #include "tables.h"
@@ -186,4 +191,56 @@ QR::QR(std::string input, ErrorCorrection level) {
 
 void QR::create() {}
 
-int main() {}
+TEST(AllTests, FirstTest) {
+  EncodingMode s1 = getOptimalEncodingScheme("123");
+  assert(s1 == EncodingMode::NUMERIC);
+
+  EncodingMode s2 = getOptimalEncodingScheme("hello");
+  assert(s2 == EncodingMode::BYTE);
+
+  EncodingMode s3 = getOptimalEncodingScheme("YO!");
+  assert(s3 == EncodingMode::BYTE);
+
+  EncodingMode s4 = getOptimalEncodingScheme("Yo123");
+  assert(s4 == EncodingMode::BYTE);
+
+  EncodingMode s5 = getOptimalEncodingScheme("HELLO WORLD");
+  assert(s5 == EncodingMode::ALPHA_NUMERIC);
+
+  BitStream bits1 = encodeNumeric("8675309");
+  assert(bits1.toString() == "110110001110000100101001");
+
+  BitStream bits2 = encodeNumeric("291");
+  assert(bits2.toString() == "0100100011");
+
+  BitStream bits3 = encodeNumeric("76");
+  assert(bits3.toString() == "1001100");
+
+  BitStream bits4 = encodeNumeric("4");
+  assert(bits4.toString() == "0100");
+
+  BitStream bits5 = encodeAlphaNumeric("HELLO WORLD");
+  assert(bits5.toString() == "0110000101101111000110100010111001011011100010011010100001101");
+
+  BitStream bits6 = encodeByteMode("Hello");
+  assert(bits6.toString() == "0100100001100101011011000110110001101111");
+
+  BitStream encoded = encodeData("HELLO WORLD", 11, 1, ErrorCorrection::QUANTILE, EncodingMode::ALPHA_NUMERIC);
+  assert(encoded.toString() == "00100000010110110000101101111000110100010111001011011100010011010100001101000000111011000001000111101100");
+
+  QR qr1("HELLO WORLD", ErrorCorrection::QUANTILE);
+  qr1.create();
+
+  /*
+  QR qr2("🤡", ErrorCorrection::LOW);
+  qr2.create();
+
+  QR qr3("abcdefghijklmopqrstuvwxyz", ErrorCorrection::LOW);
+  qr3.create();
+  */
+}
+
+int main(int argc, char** argv) {
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
