@@ -8,13 +8,13 @@ class BitStream;
 
 class Encoder {
 public:
-  Encoder(std::string input) : input_(input) {}
+  Encoder(std::string input) : _input(input) {}
   BitStream encode(ErrorCorrection level, int version);
 private:
   BitStream encodeNumeric();
   BitStream encodeAlphaNumeric();
   BitStream encodeByteMode();
 
-  std::string input_;
+  std::string _input;
   EncodingMode getOptimalEncodingMode();
 };

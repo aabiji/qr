@@ -20,8 +20,8 @@ EncodingMode Encoder::getOptimalEncodingMode() {
   int specialCharCount = 0;
   uint32_t special[] = {' ', '$', '%', '*', '+', '-', '.', '/', ':'};
 
-  for (auto it = input_.begin(); it != input_.end();) {
-    uint32_t codepoint = utf8::next(it, input_.end());
+  for (auto it = _input.begin(); it != _input.end();) {
+    uint32_t codepoint = utf8::next(it, _input.end());
     if (codepoint >= 48 && codepoint <= 57) {
       numCount += 1;
     } else if ((codepoint >= 65 && codepoint <= 90) ||
@@ -42,18 +42,18 @@ EncodingMode Encoder::getOptimalEncodingMode() {
 
 BitStream Encoder::encodeAlphaNumeric() {
   BitStream stream;
-  int size = input_.length();
+  int size = _input.length();
 
   for (int i = 0; i < size; i += 2) {
     int numBits = 11;
     uint16_t value = 0;
     if (i + 1 < size) {
       // Compute pair of characters
-      int first = alphaNumericValues.at(input_[i]);
-      int last = alphaNumericValues.at(input_[i + 1]);
+      int first = alphaNumericValues.at(_input[i]);
+      int last = alphaNumericValues.at(_input[i + 1]);
       value = 45 * first + last;
     } else {
-      value = alphaNumericValues.at(input_[i]);
+      value = alphaNumericValues.at(_input[i]);
       numBits = 6;
     }
 
@@ -69,7 +69,7 @@ BitStream Encoder::encodeAlphaNumeric() {
 
 BitStream Encoder::encodeNumeric() {
   BitStream stream;
-  int size = input_.length();
+  int size = _input.length();
 
   for (int i = 0; i < size; i += 3) {
     // The substring length should be 3 or less
@@ -78,7 +78,7 @@ BitStream Encoder::encodeNumeric() {
     // Convert the substring into int
     uint16_t value = 0;
     for (int j = 0; j < length; j++) {
-      int digit = input_[i + j] - 48;
+      int digit = _input[i + j] - 48;
       int exponent = std::abs(j - (length - 1));
       value += digit * std::pow(10, exponent);
     }
@@ -95,8 +95,8 @@ BitStream Encoder::encodeNumeric() {
 
 BitStream Encoder::encodeByteMode() {
   BitStream stream;
-  const char *bytes = input_.c_str();
-  for (int i = 0; i < input_.length(); i++) {
+  const char *bytes = _input.c_str();
+  for (int i = 0; i < _input.length(); i++) {
     for (int j = 7; j >= 0; j--) {
       bool bit = (bytes[i] & (1 << j)) >> j;
       stream.append(bit);
@@ -115,7 +115,7 @@ int nextMultiple(int start, int multiple) {
 
 BitStream Encoder::encode(ErrorCorrection level, int version) {
   EncodingMode mode = getOptimalEncodingMode();
-  int inputLength = utf8::distance(input_.begin(), input_.end());
+  int inputLength = utf8::distance(_input.begin(), _input.end());
 
   std::string modeIndicators[3] = {"0001", "0010", "0100"};
   BitStream indicator(modeIndicators[mode]);

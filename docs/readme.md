@@ -31,6 +31,16 @@ Step 2 - Data encoding:
 Step 3 - Error Correction Coding:
 - Use Reed Solomon error correction to generated error correcting codewords
 - Low (L, 7%), Medium (M, 15%), Quantile (Q, 25%), High (H, 30%) error correction (recovering data)
+- Galois field (GF) -- finite set of number with operations resulting in numbers within the same set
+  Basically, you perform regular arithmetic then modulo the result at the end
+- QR spec uses modulo 2 bitwise arithmetic (XOR) and modulo 285 byte wise arithmetic
+  So, it uses a Galois Field 2^8 (GF(256)) (numbers between 0 and 255)
+- In the Galois Field, every number can be represented as 2 ^ n, but 2 ^ n when evaluated is also within the field (0 - 255)
+- Addition and Subtraction in the galois field are the same thing, simply do the operation, then modulo by 285
+- Multiplication is just adding the exponents since as we know all numbers in the galois field can be represented as 2 ^ n
+- The powers of 2 build on each other since 2 ^ n is the same as 2 * 2 ^ n - 1, but if that results in something bigger than
+  255, then restart the sort of cycle by xoring by 285
+- You could represent the coefficients of a polynomial in an array, since the exponents always follow then same decrecending pattern
 
 Step 4 - Structure Final Message:
 - structure data and error correction codewords

@@ -19,40 +19,40 @@ public:
   BitStream(uint8_t byte) {
     for (int i = 7; i >= 0; i--) {
       bool bit = (byte & (1 << i)) >> i;
-      bits_.push_back(bit);
+      _bits.push_back(bit);
     }
   }
 
   void append(bool bit) {
-    bits_.push_back(bit);
+    _bits.push_back(bit);
   }
 
   // Pad left to meet the target size
   void padLeft(int targetSize) {
-    if (targetSize <= bits_.size()) {
+    if (targetSize <= _bits.size()) {
       return;
     }
-    std::vector<bool> pad(targetSize - bits_.size(), 0);
-    pad.insert(pad.end(), bits_.begin(), bits_.end());
-    bits_ = pad;
+    std::vector<bool> pad(targetSize - _bits.size(), 0);
+    pad.insert(pad.end(), _bits.begin(), _bits.end());
+    _bits = pad;
   }
 
   friend BitStream operator+(BitStream lhs, const BitStream& rhs) {
-    lhs.bits_.insert(lhs.bits_.end(), rhs.bits_.begin(), rhs.bits_.end());
+    lhs._bits.insert(lhs._bits.end(), rhs._bits.begin(), rhs._bits.end());
     return lhs;
   }
 
   std::string toString() {
     std::string str = "";
-    for (bool b : bits_) {
+    for (bool b : _bits) {
       str += b ? "1" : "0";
     }
     return str;
   }
 
   int length() {
-    return bits_.size();
+    return _bits.size();
   }
 private:
-  std::vector<bool> bits_;
+  std::vector<bool> _bits;
 };

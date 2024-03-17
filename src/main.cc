@@ -20,19 +20,19 @@ public:
   QR(std::string input, ErrorCorrection level);
   void create();
 private:
-  std::string input_;
-  int inputLength_;
-  EncodingMode mode_;
-  ErrorCorrection level_;
-  int version_;
-  int matrixSize_;
+  std::string _input;
+  int _inputLength;
+  EncodingMode _mode;
+  ErrorCorrection _level;
+  int _version;
+  int _matrixSize;
 };
 
 QR::QR(std::string input, ErrorCorrection level) {
-  input_ = input;
-  level_ = level;
-  version_ = findSmallestVersion(inputLength_, level_, mode_);
-  matrixSize_ = 25 + 4 * (version_ - 1);
+  _input = input;
+  _level = level;
+  _version = findSmallestVersion(_inputLength, _level, _mode);
+  _matrixSize = 25 + 4 * (_version - 1);
 }
 
 void QR::create() {}
