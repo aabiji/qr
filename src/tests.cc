@@ -3,7 +3,25 @@
 
 #include "bitstream.h"
 #include "encoder.h"
+#include "galois.h"
 #include "tables.h"
+
+TEST(GaloisField256, Multiply) {
+  GaloisInt a(76);
+  GaloisInt b(43);
+  GaloisInt c(251);
+  EXPECT_EQ(a * b, c);
+
+  GaloisInt d(16);
+  GaloisInt e(32);
+  GaloisInt f(58);
+  EXPECT_EQ(d * e, f);
+
+  GaloisInt g(198);
+  GaloisInt h(215);
+  GaloisInt i(240);
+  EXPECT_EQ(g * h, i);
+}
 
 TEST(DataEncoding, Full) {
   Encoder enc("HELLO WORLD");
