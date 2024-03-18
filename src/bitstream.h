@@ -1,8 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
-#include <cstdint>
 
 // Dynamically sized bitset
 // TODO: make it more efficient
@@ -23,9 +23,7 @@ public:
     }
   }
 
-  void append(bool bit) {
-    _bits.push_back(bit);
-  }
+  void append(bool bit) { _bits.push_back(bit); }
 
   // Pad left to meet the target size
   void padLeft(int targetSize) {
@@ -37,7 +35,7 @@ public:
     _bits = pad;
   }
 
-  friend BitStream operator+(BitStream lhs, const BitStream& rhs) {
+  friend BitStream operator+(BitStream lhs, const BitStream &rhs) {
     lhs._bits.insert(lhs._bits.end(), rhs._bits.begin(), rhs._bits.end());
     return lhs;
   }
@@ -50,9 +48,8 @@ public:
     return str;
   }
 
-  int length() {
-    return _bits.size();
-  }
+  int length() { return _bits.size(); }
+
 private:
   std::vector<bool> _bits;
 };

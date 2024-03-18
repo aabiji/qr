@@ -6,10 +6,10 @@
 #include "bitstream.h"
 #include "encoder.h"
 
-template <class T>
-bool contains(T* arr, T v, int size) {
+template <class T> bool contains(T *arr, T v, int size) {
   for (int i = 0; i < size; i++) {
-    if (arr[i] == v) return true;
+    if (arr[i] == v)
+      return true;
   }
   return false;
 }
@@ -148,7 +148,7 @@ BitStream Encoder::encode(ErrorCorrection level, int version) {
   int terminatorLength = 4;
   while (bits.length() < requiredLength && terminatorLength > 0) {
     bits.append(0);
-    terminatorLength --;
+    terminatorLength--;
   }
 
   // Pad to ensure the bitstream is a multiple of 8

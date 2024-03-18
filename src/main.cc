@@ -1,5 +1,5 @@
-#include "tables.h"
 #include "encoder.h"
+#include "tables.h"
 
 // Find the smallest qr version that will fit the data
 int findSmallestVersion(int size, ErrorCorrection l, EncodingMode m) {
@@ -9,7 +9,7 @@ int findSmallestVersion(int size, ErrorCorrection l, EncodingMode m) {
     if (size < capacity) {
       break;
     }
-    version ++;
+    version++;
     size -= capacity;
   }
   return version + 1;
@@ -19,6 +19,7 @@ class QR {
 public:
   QR(std::string input, ErrorCorrection level);
   void create();
+
 private:
   std::string _input;
   int _inputLength;

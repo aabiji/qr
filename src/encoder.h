@@ -10,6 +10,7 @@ class Encoder {
 public:
   Encoder(std::string input) : _input(input) {}
   BitStream encode(ErrorCorrection level, int version);
+
 private:
   BitStream encodeNumeric();
   BitStream encodeAlphaNumeric();
