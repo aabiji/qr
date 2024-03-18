@@ -7,7 +7,7 @@
 
 #include "tables.h"
 
-namespace Galois {
+namespace galois {
 
 // A number within GF(256)
 class Int {
@@ -19,10 +19,6 @@ public:
   Int(uint8_t num) : _num(num) {}
 
   int exponent() const { return galoisValueAntilogs[_num]; }
-
-  void debug() {
-    std::cout << "2 ** " << galoisValueAntilogs[_num] << " = " << int(_num);
-  }
 
   friend std::ostream &operator<<(std::ostream &os, const Int &g) {
     os << "a" << galoisValueAntilogs[g._num];
@@ -65,17 +61,7 @@ private:
   uint8_t _num;
 };
 
-static bool contains(std::vector<int> arr, int v) {
-  for (int i = 0; i < arr.size(); i++) {
-    if (arr[i] == v)
-      return true;
-  }
-  return false;
-}
-
-// Galois Field specific polynomials
-// TODO: refactor this and optimise this, please
-//       frankly, revise this entire file
+// A polynomial within GF(256)
 class Polynomial {
 public:
   // Constructs the polynomial from a vector of coefficient exponents.
@@ -86,17 +72,26 @@ public:
     }
   }
 
-  friend Polynomial operator*(Polynomial &lhs, const Polynomial &rhs) {
-    // Map nomial degrees to their coefficients;
-    std::map<int, Int> nomials;
+  // Create a generator polynomial for a specific number
+  // of error codewords
+  static Polynomial create_generator(int numErrorWords) {
+    Polynomial generator({0, 0});
+    for (int i = 1; i < numErrorWords; i++) {
+      Polynomial multiplier({0, i});
+      generator = generator * multiplier;
+    }
+    return generator;
+  }
 
+  friend Polynomial operator*(Polynomial &lhs, const Polynomial &rhs) {
     // Multiply each term on the left to each term on the right
     // whilst combining like terms
+    std::map<int, Int> nomials;
     int lhs_degree = lhs._coefficients.size() - 1;
-    for (int i = 0; i < lhs._coefficients.size(); i++) {
+    for (Int x : lhs._coefficients) {
       int rhs_degree = rhs._coefficients.size() - 1;
-      for (int j = 0; j < rhs._coefficients.size(); j++) {
-        Int coefficient = lhs._coefficients[i] * rhs._coefficients[j];
+      for (Int y : rhs._coefficients) {
+        Int coefficient = x * y;
         int term = lhs_degree + rhs_degree;
         nomials[term] += coefficient; // Add like terms
         rhs_degree -= 1;
@@ -136,4 +131,4 @@ private:
   std::vector<Int> _coefficients;
 };
 
-}; // Namespace Galois
+}; // namespace galois

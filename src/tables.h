@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <unordered_map>
 
 enum ErrorCorrection {
@@ -19,7 +18,7 @@ enum EncodingMode {
 
 // Values assigned to the constituents of the
 // alphanumeric character encoding set
-const std::unordered_map<char, uint8_t> alphaNumericValues = {
+const std::unordered_map<char, int> alphaNumericValues = {
   {'0',  0}, {'1',  1}, {'2',  2}, {'3',  3}, {'4',  4}, {'5',  5},
   {'6',  6}, {'7',  7}, {'8',  8}, {'9',  9}, {'A', 10}, {'B', 11},
   {'C', 12}, {'D', 13}, {'E', 14}, {'F', 15}, {'G', 16}, {'H', 17},
@@ -343,7 +342,7 @@ const int errorCorrectionInfo[40][4][6] = {
 // Each value in the field can be thought of as `v = 2 ** n`
 // So, this table gives the value of v for each value of n
 // Index by n
-const uint8_t galoisValueLogs[256] = {
+const int galoisValueLogs[256] = {
   1,   2,   4,   8,   16,  32,  64,  128, 29,  58,  116, 232, 205, 135, 19,  38,
   76,  152, 45,  90,  180, 117, 234, 201, 143, 3,   6,   12,  24,  48,  96,  192,
   157, 39,  78,  156, 37,  74,  148, 53,  106, 212, 181, 119, 238, 193, 159, 35,
@@ -366,7 +365,7 @@ const uint8_t galoisValueLogs[256] = {
 // Each value in the field can be thought of as `v = 2 ** n`
 // So, this table gives the value of n for each value of v
 // Index by v
-const uint8_t galoisValueAntilogs[256] = {
+const int galoisValueAntilogs[256] = {
   0,   0,   1,   25,  2,   50,  26,  198, 3,   223, 51,  238, 27,  104, 199, 75,
   4,   100, 224, 14,  52,  141, 239, 129, 28,  193, 105, 248, 200, 8,   76,  113,
   5,   138, 101, 47,  225, 36,  15,  33,  53,  147, 142, 218, 240, 18,  130, 69,
