@@ -72,12 +72,16 @@ public:
     }
   }
 
+  Polynomial(std::vector<Int> coefficients) : _coefficients(coefficients) {}
+
   // Create a generator polynomial for a specific number
   // of error codewords
   static Polynomial create_generator(int numErrorWords) {
-    Polynomial generator({0, 0});
+    std::vector<int> exponents = {0, 0};
+    Polynomial generator(exponents);
     for (int i = 1; i < numErrorWords; i++) {
-      Polynomial multiplier({0, i});
+      exponents = {0, i};
+      Polynomial multiplier(exponents);
       generator = generator * multiplier;
     }
     return generator;

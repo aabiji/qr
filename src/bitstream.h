@@ -48,6 +48,23 @@ public:
     return str;
   }
 
+  // TODO: implement this properly
+  std::vector<uint8_t> toBytes() {
+    int i = 0;
+    std::vector<uint8_t> bytes;
+    while (i < _bits.size()) {
+      int shift = 7;
+      uint8_t byte = 0;
+      for (int j = 0; j < 8; j++) {
+        byte |= ((uint8_t)_bits[i + j] << shift);
+        shift -= 1;
+      }
+      i += 8;
+      bytes.push_back(byte);
+    }
+    return bytes;
+  }
+
   int length() { return _bits.size(); }
 
 private:
