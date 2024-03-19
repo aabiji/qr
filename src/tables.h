@@ -95,7 +95,7 @@ const int characterIndicatorLengths[3][3] = {
 //   - Index 3: Number of data codewords in each of group 1's blocks
 //   - Index 4: Number of blocks in group 2
 //   - Index 5: Number of data codewords in each of group 2's blocks
-const int errorCorrectionInfo[40][4][6] = {
+const int dataInfo[40][4][6] = {
   {
     {19,   7,    1,    19,   0,    0     },
     {16,   10,   1,    16,   0,    0     },

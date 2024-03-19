@@ -7,6 +7,8 @@
 
 #include "tables.h"
 
+// TODO: please optimize and refactor
+
 namespace galois {
 
 // A number within GF(256)
@@ -25,13 +27,9 @@ public:
     return os;
   }
 
-  inline bool operator==(const Int &rhs) const {
-    return _num == rhs._num;
-  }
+  inline bool operator==(const Int &rhs) const { return _num == rhs._num; }
 
-  inline bool operator!=(const Int &rhs) const {
-    return _num != rhs._num;
-  }
+  inline bool operator!=(const Int &rhs) const { return _num != rhs._num; }
 
   inline bool operator<(const Int &rhs) const { return _num < rhs._num; }
 
@@ -39,9 +37,7 @@ public:
 
   // Addition and subtraction is the Galois Field is done by
   // XORing the 2 numbers together
-  friend Int operator+(Int &lhs, const Int &rhs) {
-    return lhs._num ^ rhs._num;
-  }
+  friend Int operator+(Int &lhs, const Int &rhs) { return lhs._num ^ rhs._num; }
 
   Int operator+=(const Int &rhs) {
     *this = *this + rhs;
@@ -76,7 +72,7 @@ public:
 
   // Create a generator polynomial for a specific number
   // of error codewords
-  static Polynomial create_generator(int numErrorWords) {
+  static Polynomial createGenerator(int numErrorWords) {
     std::vector<int> exponents = {0, 0};
     Polynomial generator(exponents);
     for (int i = 1; i < numErrorWords; i++) {
@@ -85,6 +81,19 @@ public:
       generator = generator * multiplier;
     }
     return generator;
+  }
+
+  Polynomial firstTerm() { return Polynomial({_coefficients[0]}); }
+
+  void removeFirstTerm() { _coefficients.erase(_coefficients.begin() + 0); }
+
+  // Convert the coefficients from numbers in GF(256) to regular numbers
+  std::vector<int> toInts() {
+    std::vector<int> nums;
+    for (Int c : _coefficients) {
+      nums.push_back(galoisValueLogs[c.exponent()]);
+    }
+    return nums;
   }
 
   friend Polynomial operator*(Polynomial &lhs, const Polynomial &rhs) {
@@ -110,6 +119,17 @@ public:
     }
 
     return Polynomial(new_coefficients);
+  }
+
+  friend Polynomial operator+(Polynomial &lhs, Polynomial &rhs) {
+    std::vector<Int> ints;
+    int max = std::max(lhs._coefficients.size(), rhs._coefficients.size());
+    for (int i = 0; i < max; i++) {
+      Int left = i >= lhs._coefficients.size() ? 0 : lhs._coefficients[i];
+      Int right = i >= rhs._coefficients.size() ? 0 : rhs._coefficients[i];
+      ints.push_back(left + right);
+    }
+    return Polynomial(ints);
   }
 
   friend std::ostream &operator<<(std::ostream &os, const Polynomial &p) {

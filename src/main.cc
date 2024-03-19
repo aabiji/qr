@@ -40,22 +40,6 @@ private:
   Encoder _encoder;
 };
 
-void generateErrorCorrectionCodes(BitStream &bits, int numErrorCodes) {
-  std::vector<galois::Int> coefficients;
-  std::vector<uint8_t> bytes = bits.toBytes();
-  for (uint8_t byte : bytes) {
-    coefficients.push_back(byte);
-  }
-  galois::Polynomial message(coefficients);
-  galois::Polynomial generator = galois::Polynomial::create_generator(numErrorCodes);
-}
+void QR::create() {}
 
-void QR::create() {
-  BitStream bits = _encoder.encode(_level, _version);
-  generateErrorCorrectionCodes(bits, 10);
-}
-
-int main() {
-  QR qr("HELLO WORLD", ErrorCorrection::MEDIUM);
-  qr.create();
-}
+int main() {}

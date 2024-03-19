@@ -142,7 +142,7 @@ BitStream Encoder::encode(ErrorCorrection level, int version) {
   bitCount.padLeft(length);
 
   BitStream bits = indicator + bitCount + data;
-  int requiredLength = errorCorrectionInfo[version - 1][level][0] * 8;
+  int requiredLength = dataInfo[version - 1][level][0] * 8;
 
   // Add a terminator of at most 4 bits
   int terminatorLength = 4;
