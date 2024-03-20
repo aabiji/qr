@@ -9,7 +9,8 @@
 
 #include <assert.h>
 
-template <class T> bool contains(T *arr, T v, int size) {
+template <class T>
+bool contains(T* arr, T v, int size) {
   for (int i = 0; i < size; i++) {
     if (arr[i] == v)
       return true;
@@ -63,7 +64,7 @@ BitStream Message::encodeAlphaNumeric() {
     // Write bits
     for (int j = numBits - 1; j >= 0; j--) {
       bool bit = (value & (1 << j)) >> j;
-      stream.append(bit);
+      stream.appendBit(bit);
     }
   }
 
@@ -89,7 +90,7 @@ BitStream Message::encodeNumeric() {
     // Write bits
     for (int j = 3 * length; j >= 0; j--) {
       bool bit = (value & (1 << j)) >> j;
-      stream.append(bit);
+      stream.appendBit(bit);
     }
   }
 
@@ -98,11 +99,11 @@ BitStream Message::encodeNumeric() {
 
 BitStream Message::encodeByteMode() {
   BitStream stream;
-  const char *bytes = _input.c_str();
+  const char* bytes = _input.c_str();
   for (int i = 0; i < _input.length(); i++) {
     for (int j = 7; j >= 0; j--) {
       bool bit = (bytes[i] & (1 << j)) >> j;
-      stream.append(bit);
+      stream.appendBit(bit);
     }
   }
   return stream;
@@ -120,8 +121,10 @@ BitStream Message::encode() {
   EncodingMode mode = getOptimalEncodingMode();
   int inputLength = utf8::distance(_input.begin(), _input.end());
 
-  std::string modeIndicators[3] = {"0001", "0010", "0100"};
-  BitStream indicator(modeIndicators[mode]);
+  // 0001 for EncodingMode::NUMERIC, 0010 for EncodingMode::ALPHA_NUMERIC, 0100
+  // for EncodingMode::BYTE
+  BitStream indicator;
+  indicator.appendByte(std::max(1, mode * 2), 4);
 
   BitStream data;
   if (mode == EncodingMode::NUMERIC) {
@@ -150,14 +153,14 @@ BitStream Message::encode() {
   // Add a terminator of at most 4 bits
   int terminatorLength = 4;
   while (bits.length() < requiredLength && terminatorLength > 0) {
-    bits.append(0);
+    bits.appendBit(0);
     terminatorLength--;
   }
 
   // Pad to ensure the bitstream is a multiple of 8
   int target = nextMultiple(bits.length(), 8);
   while (bits.length() < target) {
-    bits.append(0);
+    bits.appendBit(0);
   }
 
   // Pad with alternating byte to ensure the bitstream
@@ -172,8 +175,10 @@ BitStream Message::encode() {
   return bits;
 }
 
-std::vector<uint8_t> Message::generateCorrectionCodes(int blockStart, int blockEnd) {
-  auto block = std::vector<uint8_t>(_encodedData.begin() + blockStart, _encodedData.begin() + blockEnd);
+std::vector<uint8_t> Message::generateCorrectionCodes(int blockStart,
+                                                      int blockEnd) {
+  auto block = std::vector<uint8_t>(_encodedData.begin() + blockStart,
+                                    _encodedData.begin() + blockEnd);
 
   std::vector<galois::Int> coefficients;
   for (uint8_t byte : block) {
@@ -209,7 +214,8 @@ void Message::interleaveData() {
   // Generate error correction codes for each block in the first group
   std::vector<uint8_t> group1ErrorCodes[group1Blocks] = {};
   for (int block = 0; block < group1Blocks; block++) {
-    group1ErrorCodes[block] = generateCorrectionCodes(start, start + group1BlockSize);
+    group1ErrorCodes[block] =
+        generateCorrectionCodes(start, start + group1BlockSize);
     start += group1BlockSize;
   }
 
@@ -217,7 +223,8 @@ void Message::interleaveData() {
   std::vector<uint8_t> group2ErrorCodes[group2Blocks] = {};
   for (int block = 0; block < group2Blocks; block++) {
     int end = start + group2BlockSize;
-    group2ErrorCodes[block] = generateCorrectionCodes(start, start + group2BlockSize);
+    group2ErrorCodes[block] =
+        generateCorrectionCodes(start, start + group2BlockSize);
     start += group2BlockSize;
   }
 

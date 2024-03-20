@@ -6,8 +6,8 @@
 #include "deps/stb/stb_image_write.h"
 
 #include "bitstream.h"
-#include "message.h"
 #include "galois.h"
+#include "message.h"
 #include "tables.h"
 
 // Find the smallest qr version that will fit the data
@@ -25,8 +25,9 @@ int findSmallestVersion(int size, ErrorCorrection l, EncodingMode m) {
 }
 
 class QR {
-public:
-  QR(std::string input, ErrorCorrection level) : _message(input, level, _version) { // todo: passing version is dodgy
+ public:
+  QR(std::string input, ErrorCorrection level)
+      : _message(input, level, _version) {  // todo: passing version is dodgy
     _input = input;
     _level = level;
     _version = findSmallestVersion(_inputLength, _level, _mode);
@@ -35,7 +36,7 @@ public:
 
   void create();
 
-private:
+ private:
   int _inputLength;
   int _version;
   int _matrixSize;

@@ -7,29 +7,25 @@
 // Dynamically sized bitset
 // TODO: make it more efficient
 class BitStream {
-public:
+ public:
   BitStream() {}
 
-  BitStream(std::string from) {
-    for (char c : from) {
-      append(c == '0' ? 0 : 1);
-    }
-  }
+  BitStream(uint8_t byte) { appendByte(byte); }
 
-  BitStream(uint8_t byte) {
-    for (int i = 7; i >= 0; i--) {
+  int length() { return _bits.size(); }
+
+  void appendBit(bool bit) { _bits.push_back(bit); }
+
+  void appendByte(uint8_t byte, int numBits = 8) {
+    for (int i = numBits - 1; i >= 0; i--) {
       bool bit = (byte & (1 << i)) >> i;
       _bits.push_back(bit);
     }
   }
 
-  void append(bool bit) { _bits.push_back(bit); }
-
-  void appendByte(uint8_t byte) {
-    for (int i = 7; i >= 0; i--) {
-      bool bit = (byte & (1 << i)) >> i;
-      _bits.push_back(bit);
-    }
+  friend BitStream operator+(BitStream lhs, const BitStream& rhs) {
+    lhs._bits.insert(lhs._bits.end(), rhs._bits.begin(), rhs._bits.end());
+    return lhs;
   }
 
   // Pad left to meet the target size
@@ -40,11 +36,6 @@ public:
     std::vector<bool> pad(targetSize - _bits.size(), 0);
     pad.insert(pad.end(), _bits.begin(), _bits.end());
     _bits = pad;
-  }
-
-  friend BitStream operator+(BitStream lhs, const BitStream &rhs) {
-    lhs._bits.insert(lhs._bits.end(), rhs._bits.begin(), rhs._bits.end());
-    return lhs;
   }
 
   std::string toString() {
@@ -72,8 +63,6 @@ public:
     return bytes;
   }
 
-  int length() { return _bits.size(); }
-
-private:
+ private:
   std::vector<bool> _bits;
 };

@@ -70,8 +70,9 @@ TEST(Polynomial, Generator) {
 TEST(MessageGeneration, EncodeData) {
   Message enc("HELLO WORLD", ErrorCorrection::QUANTILE, 1);
   BitStream bits = enc.encode();
-  std::string required = "00100000010110110000101101111000110100010111001011011"
-                         "100010011010100001101000000111011000001000111101100";
+  std::string required =
+      "00100000010110110000101101111000110100010111001011011"
+      "100010011010100001101000000111011000001000111101100";
   EXPECT_EQ(bits.toString(), required);
 
   Message enc1("HELLO WORLD", ErrorCorrection::MEDIUM, 1);
@@ -124,7 +125,7 @@ TEST(ErrorCorrectionCodes, Full) {
 }
 */
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
