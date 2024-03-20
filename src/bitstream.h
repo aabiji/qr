@@ -25,6 +25,13 @@ public:
 
   void append(bool bit) { _bits.push_back(bit); }
 
+  void appendByte(uint8_t byte) {
+    for (int i = 7; i >= 0; i--) {
+      bool bit = (byte & (1 << i)) >> i;
+      _bits.push_back(bit);
+    }
+  }
+
   // Pad left to meet the target size
   void padLeft(int targetSize) {
     if (targetSize <= _bits.size()) {

@@ -2,8 +2,8 @@
 #include <string>
 
 #include "bitstream.h"
-#include "encoder.h"
 #include "galois.h"
+#include "message.h"
 #include "tables.h"
 
 TEST(GaloisField256, Add) {
@@ -67,15 +67,15 @@ TEST(Polynomial, Generator) {
   EXPECT_EQ(p6, p7);
 }
 
-TEST(DataEncoding, Full) {
-  Encoder enc("HELLO WORLD");
-  BitStream bits = enc.encode(ErrorCorrection::QUANTILE, 1);
+TEST(MessageGeneration, EncodeData) {
+  Message enc("HELLO WORLD", ErrorCorrection::QUANTILE, 1);
+  BitStream bits = enc.encode();
   std::string required = "00100000010110110000101101111000110100010111001011011"
                          "100010011010100001101000000111011000001000111101100";
   EXPECT_EQ(bits.toString(), required);
 
-  Encoder enc1("HELLO WORLD");
-  BitStream bits1 = enc1.encode(ErrorCorrection::MEDIUM, 1);
+  Message enc1("HELLO WORLD", ErrorCorrection::MEDIUM, 1);
+  BitStream bits1 = enc1.encode();
   std::string required1 =
       "001000000101101100001011011110001101000101110010110111000100110101000011"
       "01000000111011000001000111101100000100011110110000010001";
@@ -85,40 +85,44 @@ TEST(DataEncoding, Full) {
   EXPECT_EQ(bits1.toBytes(), bytes);
 };
 
-std::vector<int> generateErrorCorrectionCodes(std::vector<uint8_t> bytes,
-                                              ErrorCorrection level,
-                                              int version) {
-  std::vector<galois::Int> coefficients;
-  for (uint8_t byte : bytes) {
-    coefficients.push_back(galois::Int(byte));
-  }
-  galois::Polynomial message(coefficients);
-  int messageLength = coefficients.size();
-
-  int numErrorCodes = dataInfo[version - 1][level][1];
-  galois::Polynomial generator =
-      galois::Polynomial::createGenerator(numErrorCodes);
-
-  // Divide the message polynomial by the generator polynomial
-  for (int i = 0; i < messageLength; i++) {
-    galois::Polynomial result = generator * message.firstTerm();
-    message = result + message;
-    message.removeFirstTerm();
-  }
-
-  // The error correction codes are the remainder
-  // of the division
-  return message.toInts();
+TEST(MessageGeneration, Full) {
+  std::vector<uint8_t> input = {
+      67,  85,  70,  134, 87,  38,  85,  194, 119, 50,  6,   18,  6,
+      103, 38,  246, 246, 66,  7,   118, 134, 242, 7,   38,  86,  22,
+      198, 199, 146, 6,   182, 230, 247, 119, 50,  7,   118, 134, 87,
+      38,  82,  6,   134, 151, 50,  7,   70,  247, 118, 86,  194, 6,
+      151, 50,  16,  236, 17,  236, 17,  236, 17,  236};
+  Message msg(input, ErrorCorrection::QUANTILE, 5);
+  BitStream out = msg.generate();
+  std::string expected =
+      "010000111111011010110110010001100101010111110110111001101111011101000110"
+      "010000101111011101110110100001100000011101110111010101100101011101110110"
+      "001100101100001000100110100001100000011100000110010101011111001001110110"
+      "100101111100001000000111100001100011001001110111001001100101011100010000"
+      "001100100101011000100110111011000000011000010110010100100001000100010010"
+      "110001100000011011101100000001101100011110000110000100010110011110010010"
+      "100101111110110000100110000001100011001000010001000001111110110011010101"
+      "010101111001010011101011110001111100110001110100100111110000101101100000"
+      "101100010000010100101101001111001101010010101101011100111100101001001100"
+      "000110001111011110110110100001011001001111110001011111000100101100111011"
+      "110111111001110111110010001000011110010111001000111011100110101011111000"
+      "100001100100110000101000100110100001101111000011111111110111010110000001"
+      "111001101010110010011010110100011011110101010010011011110001000100001010"
+      "000000100101011010100011011011001000001110100001101000111111000000100000"
+      "0110111101111000110000001011001000100111100001011000110111101100";
+  EXPECT_EQ(out.toString(), expected);
 }
 
+/*
 TEST(ErrorCorrectionCodes, Full) {
-  Encoder enc("HELLO WORLD");
-  BitStream bits = enc.encode(ErrorCorrection::MEDIUM, 1);
+  Message enc("HELLO WORLD", ErrorCorrection::MEDIUM, 1);
+  BitStream bits = enc.encode();
   auto codes =
       generateErrorCorrectionCodes(bits.toBytes(), ErrorCorrection::MEDIUM, 1);
   std::vector<int> expected = {196, 35, 39, 119, 235, 215, 231, 226, 93, 23};
   EXPECT_EQ(codes, expected);
 }
+*/
 
 int main(int argc, char **argv) {
   testing::InitGoogleTest(&argc, argv);

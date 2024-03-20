@@ -6,7 +6,7 @@
 #include "deps/stb/stb_image_write.h"
 
 #include "bitstream.h"
-#include "encoder.h"
+#include "message.h"
 #include "galois.h"
 #include "tables.h"
 
@@ -26,7 +26,7 @@ int findSmallestVersion(int size, ErrorCorrection l, EncodingMode m) {
 
 class QR {
 public:
-  QR(std::string input, ErrorCorrection level) : _encoder(input) {
+  QR(std::string input, ErrorCorrection level) : _message(input, level, _version) { // todo: passing version is dodgy
     _input = input;
     _level = level;
     _version = findSmallestVersion(_inputLength, _level, _mode);
@@ -42,9 +42,12 @@ private:
   std::string _input;
   EncodingMode _mode;
   ErrorCorrection _level;
-  Encoder _encoder;
+  Message _message;
 };
 
 void QR::create() {}
 
-int main() {}
+int main() {
+  Message m("Hello!", ErrorCorrection::LOW, 1);
+  m.generate();
+}

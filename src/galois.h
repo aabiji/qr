@@ -88,8 +88,8 @@ public:
   void removeFirstTerm() { _coefficients.erase(_coefficients.begin() + 0); }
 
   // Convert the coefficients from numbers in GF(256) to regular numbers
-  std::vector<int> toInts() {
-    std::vector<int> nums;
+  std::vector<uint8_t> toInts() {
+    std::vector<uint8_t> nums;
     for (Int c : _coefficients) {
       nums.push_back(galoisValueLogs[c.exponent()]);
     }

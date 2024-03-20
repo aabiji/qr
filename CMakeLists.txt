@@ -14,7 +14,7 @@ FetchContent_MakeAvailable(googletest)
 include(GoogleTest)
 
 # Main executable
-add_executable(qr-bin src/main.cc src/encoder.cc)
+add_executable(qr-bin src/main.cc src/message.cc)
 target_include_directories(qr-bin PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/deps/utfcpp)
 if (CMAKE_COMPILER_IS_GNUCC)
   target_compile_options(main PRIVATE -Wall -Wextra -Wunintialized -pedantic)
@@ -22,7 +22,7 @@ endif()
 
 # Test executable
 enable_testing()
-add_executable(qr-tests src/tests.cc src/encoder.cc)
+add_executable(qr-tests src/tests.cc src/message.cc)
 target_link_libraries(qr-tests GTest::gtest_main)
 target_include_directories(qr-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/deps/utfcpp)
 gtest_discover_tests(qr-tests)
