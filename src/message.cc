@@ -7,8 +7,6 @@
 #include "galois.h"
 #include "message.h"
 
-#include <assert.h>
-
 template <class T>
 bool contains(T* arr, T v, int size) {
   for (int i = 0; i < size; i++) {
@@ -18,7 +16,21 @@ bool contains(T* arr, T v, int size) {
   return false;
 }
 
-EncodingMode Message::getOptimalEncodingMode() {
+// Find the smallest qr version that will fit the data
+void Message::findSmallestVersion() {
+  _qrVersion = 1;
+  int size = _input.length();
+  while (true) {
+    int capacity = characterCapacities[_qrVersion - 1][_level][_mode];
+    if (size < capacity) {
+      break;
+    }
+    _qrVersion += 1;
+    size -= capacity;
+  }
+}
+
+void Message::getOptimalEncodingMode() {
   int numCount = 0;
   int lowerCaseCount = 0;
   int specialCharCount = 0;
@@ -37,11 +49,12 @@ EncodingMode Message::getOptimalEncodingMode() {
   }
 
   if (lowerCaseCount > 0) {
-    return EncodingMode::BYTE;
+    _mode = EncodingMode::BYTE;
   } else if (numCount == (numCount + specialCharCount)) {
-    return EncodingMode::NUMERIC;
+    _mode = EncodingMode::NUMERIC;
+  } else {
+    _mode = EncodingMode::ALPHA_NUMERIC;
   }
-  return EncodingMode::ALPHA_NUMERIC;
 }
 
 BitStream Message::encodeAlphaNumeric() {
@@ -64,7 +77,7 @@ BitStream Message::encodeAlphaNumeric() {
     // Write bits
     for (int j = numBits - 1; j >= 0; j--) {
       bool bit = (value & (1 << j)) >> j;
-      stream.appendBit(bit);
+      stream.bits.push_back(bit);
     }
   }
 
@@ -90,7 +103,7 @@ BitStream Message::encodeNumeric() {
     // Write bits
     for (int j = 3 * length; j >= 0; j--) {
       bool bit = (value & (1 << j)) >> j;
-      stream.appendBit(bit);
+      stream.bits.push_back(bit);
     }
   }
 
@@ -103,7 +116,7 @@ BitStream Message::encodeByteMode() {
   for (int i = 0; i < _input.length(); i++) {
     for (int j = 7; j >= 0; j--) {
       bool bit = (bytes[i] & (1 << j)) >> j;
-      stream.appendBit(bit);
+      stream.bits.push_back(bit);
     }
   }
   return stream;
@@ -117,19 +130,18 @@ int nextMultiple(int start, int multiple) {
   return start;
 }
 
-BitStream Message::encode() {
-  EncodingMode mode = getOptimalEncodingMode();
+BitStream Message::process() {
   int inputLength = utf8::distance(_input.begin(), _input.end());
 
   // 0001 for EncodingMode::NUMERIC, 0010 for EncodingMode::ALPHA_NUMERIC, 0100
   // for EncodingMode::BYTE
   BitStream indicator;
-  indicator.appendByte(std::max(1, mode * 2), 4);
+  indicator.appendByte(std::max(1, _mode * 2), 4);
 
   BitStream data;
-  if (mode == EncodingMode::NUMERIC) {
+  if (_mode == EncodingMode::NUMERIC) {
     data = encodeNumeric();
-  } else if (mode == EncodingMode::ALPHA_NUMERIC) {
+  } else if (_mode == EncodingMode::ALPHA_NUMERIC) {
     data = encodeAlphaNumeric();
   } else {
     data = encodeByteMode();
@@ -138,11 +150,11 @@ BitStream Message::encode() {
   // Pad the character indicator bits to meet the required length
   int length = 0;
   if (_qrVersion >= 1 && _qrVersion <= 9) {
-    length = characterIndicatorLengths[0][mode];
+    length = characterIndicatorLengths[0][_mode];
   } else if (_qrVersion >= 10 && _qrVersion <= 26) {
-    length = characterIndicatorLengths[1][mode];
+    length = characterIndicatorLengths[1][_mode];
   } else if (_qrVersion >= 27 && _qrVersion <= 40) {
-    length = characterIndicatorLengths[2][mode];
+    length = characterIndicatorLengths[2][_mode];
   }
   BitStream bitCount(inputLength);
   bitCount.padLeft(length);
@@ -152,20 +164,20 @@ BitStream Message::encode() {
 
   // Add a terminator of at most 4 bits
   int terminatorLength = 4;
-  while (bits.length() < requiredLength && terminatorLength > 0) {
-    bits.appendBit(0);
+  while (bits.bits.size() < requiredLength && terminatorLength > 0) {
+    bits.bits.push_back(0);
     terminatorLength--;
   }
 
   // Pad to ensure the bitstream is a multiple of 8
-  int target = nextMultiple(bits.length(), 8);
-  while (bits.length() < target) {
-    bits.appendBit(0);
+  int target = nextMultiple(bits.bits.size(), 8);
+  while (bits.bits.size() < target) {
+    bits.bits.push_back(0);
   }
 
   // Pad with alternating byte to ensure the bitstream
   // is the required length
-  int remaining = (requiredLength - bits.length()) / 8;
+  int remaining = (requiredLength - bits.bits.size()) / 8;
   for (int i = 0; i < remaining; i++) {
     int num = i % 2 == 0 ? 236 : 17;
     BitStream pad(num);
@@ -200,7 +212,7 @@ std::vector<uint8_t> Message::generateCorrectionCodes(int blockStart,
 
   // The error correction codes are the remainder
   // of the division
-  return message.toInts();
+  return message.getCoefficients();
 }
 
 void Message::interleaveData() {
@@ -257,11 +269,25 @@ void Message::interleaveData() {
   }
 }
 
-BitStream Message::generate() {
+BitStream Message::encode() {
   if (_encodedData.size() == 0) {
-    _encodedData = encode().toBytes();
+    _encodedData = process().toBytes();
   }
 
-  interleaveData();
+  int group1Blocks = dataInfo[_qrVersion - 1][_level][2];
+  int group2Blocks = dataInfo[_qrVersion - 1][_level][4];
+  int totalBlocks = group1Blocks + group2Blocks;
+  if (totalBlocks > 1) {
+    interleaveData();
+  } else {
+    auto errorCodes = generateCorrectionCodes(0, _encodedData.size());
+    for (uint8_t byte : _encodedData) {
+      _preparedData.appendByte(byte);
+    }
+    for (uint8_t code : errorCodes) {
+      _preparedData.appendByte(code);
+    }
+  }
+
   return _preparedData;
 }

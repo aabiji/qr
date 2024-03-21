@@ -9,34 +9,39 @@ class BitStream;
 
 class Message {
  public:
-  Message(std::string input, ErrorCorrection level, int version) {
+  Message(std::string input, ErrorCorrection level) {
     _input = input;
-    _qrVersion = version;
     _level = level;
+    getOptimalEncodingMode();
+    findSmallestVersion();
   }
 
   Message(std::vector<uint8_t> encodedData, ErrorCorrection level, int version)
       : _encodedData(encodedData) {
-    _qrVersion = version;
     _level = level;
+    _qrVersion = version;
   }
 
-  BitStream encode();  // todo: make this private
-  BitStream generate();
-
+  BitStream encode();
  private:
   BitStream encodeNumeric();
   BitStream encodeAlphaNumeric();
   BitStream encodeByteMode();
-  EncodingMode getOptimalEncodingMode();
   std::vector<uint8_t> generateCorrectionCodes(
       int blockStart,
       int blockEnd);  // generate error correction codes for a block of data
   void interleaveData();
+  BitStream process();
+
+  void getOptimalEncodingMode();
+
+  // Find the smallest qr version that will fit the data
+  void findSmallestVersion();
 
   int _qrVersion;
   std::string _input;
   ErrorCorrection _level;
+  EncodingMode _mode;
   std::vector<uint8_t> _encodedData;
   BitStream _preparedData;
 };
