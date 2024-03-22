@@ -4,7 +4,6 @@
 #include <vector>
 
 // Dynamically sized bitset
-// TODO: make it more efficient
 class BitStream {
  public:
   std::vector<bool> bits;
@@ -35,18 +34,23 @@ class BitStream {
     bits = pad;
   }
 
-  // TODO: implement this properly
   std::vector<uint8_t> toBytes() {
-    int i = 0;
+    int shift = 0;
+    uint8_t byte = 0;
     std::vector<uint8_t> bytes;
-    while (i < bits.size()) {
-      int shift = 7;
-      uint8_t byte = 0;
-      for (int j = 0; j < 8; j++) {
-        byte |= ((uint8_t)bits[i + j] << shift);
-        shift -= 1;
+
+    for (bool bit : bits) {
+      byte |= (bit ? 1 : 0) << (7 - shift);
+      shift += 1;
+      if (shift == 8) {
+        bytes.push_back(byte);
+        byte = 0;
+        shift = 0;
       }
-      i += 8;
+    }
+
+    if (shift > 0) {
+      byte <<= (8 - shift);
       bytes.push_back(byte);
     }
     return bytes;

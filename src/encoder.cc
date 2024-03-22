@@ -299,6 +299,10 @@ void Encoder::interleaveData() {
 }
 
 BitStream Encoder::encode() {
+  if (_encodedData.bits.size() > 0) {
+    return _encodedData; // Already encoded
+  }
+
   process();
   int totalBlocks = _groups[0].numBlocks + _groups[1].numBlocks;
 
