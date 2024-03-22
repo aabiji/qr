@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
 #include <vector>
 
 // Dynamically sized bitset
@@ -34,14 +33,6 @@ class BitStream {
     std::vector<bool> pad(targetSize - bits.size(), 0);
     pad.insert(pad.end(), bits.begin(), bits.end());
     bits = pad;
-  }
-
-  std::string toString() {
-    std::string str = "";
-    for (bool b : bits) {
-      str += b ? "1" : "0";
-    }
-    return str;
   }
 
   // TODO: implement this properly

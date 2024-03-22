@@ -4,8 +4,21 @@
 #include <utf8.h>
 
 #include "bitstream.h"
+#include "encoder.h"
 #include "galois.h"
-#include "message.h"
+
+Encoder::Encoder(std::string input, ErrorCorrection level) {
+  _input = input;
+  _level = level;
+
+  getOptimalEncodingMode();
+  findSmallestVersion();
+  getGroupInfo();
+}
+
+int Encoder::getQrVersion() {
+  return _version;
+}
 
 template <class T>
 bool contains(T* arr, T v, int size) {
@@ -17,20 +30,20 @@ bool contains(T* arr, T v, int size) {
 }
 
 // Find the smallest qr version that will fit the data
-void Message::findSmallestVersion() {
-  _qrVersion = 1;
+void Encoder::findSmallestVersion() {
+  _version = 1;
   int size = _input.length();
   while (true) {
-    int capacity = characterCapacities[_qrVersion - 1][_level][_mode];
+    int capacity = characterCapacities[_version - 1][_level][_mode];
     if (size < capacity) {
       break;
     }
-    _qrVersion += 1;
+    _version += 1;
     size -= capacity;
   }
 }
 
-void Message::getOptimalEncodingMode() {
+void Encoder::getOptimalEncodingMode() {
   int numCount = 0;
   int lowerCaseCount = 0;
   int specialCharCount = 0;
@@ -57,7 +70,7 @@ void Message::getOptimalEncodingMode() {
   }
 }
 
-BitStream Message::encodeAlphaNumeric() {
+BitStream Encoder::encodeAlphaNumeric() {
   BitStream stream;
   int size = _input.length();
 
@@ -84,7 +97,7 @@ BitStream Message::encodeAlphaNumeric() {
   return stream;
 }
 
-BitStream Message::encodeNumeric() {
+BitStream Encoder::encodeNumeric() {
   BitStream stream;
   int size = _input.length();
 
@@ -110,7 +123,7 @@ BitStream Message::encodeNumeric() {
   return stream;
 }
 
-BitStream Message::encodeByteMode() {
+BitStream Encoder::encodeByteMode() {
   BitStream stream;
   const char* bytes = _input.c_str();
   for (int i = 0; i < _input.length(); i++) {
@@ -130,13 +143,13 @@ int nextMultiple(int start, int multiple) {
   return start;
 }
 
-BitStream Message::process() {
+void Encoder::process() {
   int inputLength = utf8::distance(_input.begin(), _input.end());
 
-  // 0001 for EncodingMode::NUMERIC, 0010 for EncodingMode::ALPHA_NUMERIC, 0100
-  // for EncodingMode::BYTE
+  // The mode incator of 4 bits
   BitStream indicator;
-  indicator.appendByte(std::max(1, _mode * 2), 4);
+  uint8_t modeIndicators[3] = {0b001, 0b0010, 0b0100};
+  indicator.appendByte(modeIndicators[_mode], 4);
 
   BitStream data;
   if (_mode == EncodingMode::NUMERIC) {
@@ -149,48 +162,48 @@ BitStream Message::process() {
 
   // Pad the character indicator bits to meet the required length
   int length = 0;
-  if (_qrVersion >= 1 && _qrVersion <= 9) {
+  if (_version >= 1 && _version <= 9) {
     length = characterIndicatorLengths[0][_mode];
-  } else if (_qrVersion >= 10 && _qrVersion <= 26) {
+  } else if (_version >= 10 && _version <= 26) {
     length = characterIndicatorLengths[1][_mode];
-  } else if (_qrVersion >= 27 && _qrVersion <= 40) {
+  } else if (_version >= 27 && _version <= 40) {
     length = characterIndicatorLengths[2][_mode];
   }
   BitStream bitCount(inputLength);
   bitCount.padLeft(length);
 
-  BitStream bits = indicator + bitCount + data;
-  int requiredLength = dataInfo[_qrVersion - 1][_level][0] * 8;
+  BitStream processed = indicator + bitCount + data;
+  int requiredLength = dataInfo[_version - 1][_level][0] * 8;
 
   // Add a terminator of at most 4 bits
   int terminatorLength = 4;
-  while (bits.bits.size() < requiredLength && terminatorLength > 0) {
-    bits.bits.push_back(0);
+  while (processed.bits.size() < requiredLength && terminatorLength > 0) {
+    processed.bits.push_back(0);
     terminatorLength--;
   }
 
   // Pad to ensure the bitstream is a multiple of 8
-  int target = nextMultiple(bits.bits.size(), 8);
-  while (bits.bits.size() < target) {
-    bits.bits.push_back(0);
+  int target = nextMultiple(processed.bits.size(), 8);
+  while (processed.bits.size() < target) {
+    processed.bits.push_back(0);
   }
 
   // Pad with alternating byte to ensure the bitstream
   // is the required length
-  int remaining = (requiredLength - bits.bits.size()) / 8;
+  int remaining = (requiredLength - processed.bits.size()) / 8;
   for (int i = 0; i < remaining; i++) {
     int num = i % 2 == 0 ? 236 : 17;
     BitStream pad(num);
-    bits = bits + pad;
+    processed = processed + pad;
   }
 
-  return bits;
+  _preparedData = processed.toBytes();
 }
 
-std::vector<uint8_t> Message::generateCorrectionCodes(int blockStart,
-                                                      int blockEnd) {
-  auto block = std::vector<uint8_t>(_encodedData.begin() + blockStart,
-                                    _encodedData.begin() + blockEnd);
+std::vector<uint8_t> Encoder::generateCorrectionCodes(int rangeStart,
+                                                      int rangeEnd) {
+  auto block = std::vector<uint8_t>(_preparedData.begin() + rangeStart,
+                                    _preparedData.begin() + rangeEnd);
 
   std::vector<galois::Int> coefficients;
   for (uint8_t byte : block) {
@@ -199,7 +212,7 @@ std::vector<uint8_t> Message::generateCorrectionCodes(int blockStart,
   galois::Polynomial message(coefficients);
   int numCoefficients = coefficients.size();
 
-  int numErrorCodes = dataInfo[_qrVersion - 1][_level][1];
+  int numErrorCodes = dataInfo[_version - 1][_level][1];
   galois::Polynomial generator =
       galois::Polynomial::createGenerator(numErrorCodes);
 
@@ -215,79 +228,98 @@ std::vector<uint8_t> Message::generateCorrectionCodes(int blockStart,
   return message.getCoefficients();
 }
 
-void Message::interleaveData() {
-  int numErrorCodes = dataInfo[_qrVersion - 1][_level][1];
-  int group1Blocks = dataInfo[_qrVersion - 1][_level][2];
-  int group2Blocks = dataInfo[_qrVersion - 1][_level][4];
-  int group1BlockSize = dataInfo[_qrVersion - 1][_level][3];
-  int group2BlockSize = dataInfo[_qrVersion - 1][_level][5];
+void Encoder::getGroupInfo() {
+  // Group 1
+  _groups[0].iter = 0;
+  _groups[0].numBlocks = dataInfo[_version - 1][_level][2];
+  _groups[0].blockSize = dataInfo[_version - 1][_level][3];
 
-  int start = 0;
-  // Generate error correction codes for each block in the first group
-  std::vector<uint8_t> group1ErrorCodes[group1Blocks] = {};
-  for (int block = 0; block < group1Blocks; block++) {
-    group1ErrorCodes[block] =
-        generateCorrectionCodes(start, start + group1BlockSize);
-    start += group1BlockSize;
-  }
+  // Group 2
+  _groups[1].iter = 0;
+  _groups[1].numBlocks = dataInfo[_version - 1][_level][4];
+  _groups[1].blockSize = dataInfo[_version - 1][_level][5];
+}
 
-  // Generate error correction codes for each block in the second group
-  std::vector<uint8_t> group2ErrorCodes[group2Blocks] = {};
-  for (int block = 0; block < group2Blocks; block++) {
-    int end = start + group2BlockSize;
-    group2ErrorCodes[block] =
-        generateCorrectionCodes(start, start + group2BlockSize);
-    start += group2BlockSize;
-  }
+void Encoder::interleaveData() {
+  // Index into blockCodes by group (0 or 1), then by block index, then by
+  // specific byte index
+  std::vector<std::vector<std::vector<uint8_t>>> blockCodes(2);
 
-  int upTo = std::max(group1BlockSize, group2BlockSize);
-  for (int i = 0; i < upTo; i++) {
-    if (i < group1BlockSize) {
-      int group1Start = 0;
-      for (int j = 0; j < group1Blocks; j++) {
-        _preparedData.appendByte(_encodedData[group1Start + i]);
-        group1Start += group1BlockSize;
-      }
+  // Generate error correction codes for each block in each group
+  for (int i = 0; i < 2; i++) {
+    _groups[i].iter = 0;
+    if (i == 1) {  // Group 2 indexing
+      _groups[i].iter = _groups[0].numBlocks * _groups[0].blockSize;
     }
 
-    if (i < group2BlockSize) {
-      int group2Start = group1BlockSize * group1Blocks;
-      for (int j = 0; j < group2Blocks; j++) {
-        _preparedData.appendByte(_encodedData[group2Start + i]);
-        group2Start += group2BlockSize;
-      }
+    for (int j = 0; j < _groups[i].numBlocks; j++) {
+      int size = _groups[i].blockSize;
+      auto codes =
+          generateCorrectionCodes(_groups[i].iter, _groups[i].iter + size);
+      blockCodes[i].push_back(codes);
+      _groups[i].iter += size;
     }
   }
 
+  // Interleave data blocks:
+  // Put the first byte from the first block,
+  // Then the first byte from the second block,
+  // Then the second byte from the first block,
+  // Then the second byte from the second block,
+  // And so on ...
+  int maxSize = std::max(_groups[0].blockSize, _groups[1].blockSize);
+  for (int i = 0; i < maxSize; i++) {
+    _groups[0].iter = 0;
+    _groups[1].iter = _groups[0].numBlocks * _groups[0].blockSize;
+    for (int j = 0; j < 2; j++) {
+      // Block sizes for the first and second groups might
+      // not be the same...
+      if (i >= _groups[j].blockSize) {
+        continue;
+      }
+
+      for (int b = 0; b < _groups[j].numBlocks; b++) {
+        int size = _groups[j].blockSize;
+        uint8_t byte = _preparedData[_groups[j].iter + i];
+        _encodedData.appendByte(byte);
+        _groups[j].iter += size;
+      }
+    }
+  }
+
+  // Interleave error codes in the same way we interleaved data blocks
+  int numErrorCodes = dataInfo[_version - 1][_level][1];
   for (int i = 0; i < numErrorCodes; i++) {
-    for (int j = 0; j < group1Blocks; j++) {
-      _preparedData.appendByte(group1ErrorCodes[j][i]);
-    }
-    for (int j = 0; j < group2Blocks; j++) {
-      _preparedData.appendByte(group2ErrorCodes[j][i]);
+    for (int j = 0; j < 2; j++) {
+      for (int n = 0; n < _groups[j].numBlocks; n++) {
+        _encodedData.appendByte(blockCodes[j][n][i]);
+      }
     }
   }
 }
 
-BitStream Message::encode() {
-  if (_encodedData.size() == 0) {
-    _encodedData = process().toBytes();
-  }
+BitStream Encoder::encode() {
+  process();
+  int totalBlocks = _groups[0].numBlocks + _groups[1].numBlocks;
 
-  int group1Blocks = dataInfo[_qrVersion - 1][_level][2];
-  int group2Blocks = dataInfo[_qrVersion - 1][_level][4];
-  int totalBlocks = group1Blocks + group2Blocks;
-  if (totalBlocks > 1) {
-    interleaveData();
-  } else {
-    auto errorCodes = generateCorrectionCodes(0, _encodedData.size());
-    for (uint8_t byte : _encodedData) {
-      _preparedData.appendByte(byte);
+  // No need to interleave data if there's only one block
+  if (totalBlocks == 1) {
+    for (uint8_t byte : _preparedData) {
+      _encodedData.appendByte(byte);
     }
+    auto errorCodes = generateCorrectionCodes(0, _preparedData.size());
     for (uint8_t code : errorCodes) {
-      _preparedData.appendByte(code);
+      _encodedData.appendByte(code);
     }
+  } else {
+    interleaveData();
   }
 
-  return _preparedData;
+  BitStream remainder;
+  for (int i = 0; i < remainderBits[_version - 1]; i++) {
+    remainder.bits.push_back(0);
+  }
+
+  _encodedData = _encodedData + remainder;
+  return _encodedData;
 }

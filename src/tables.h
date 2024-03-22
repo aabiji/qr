@@ -85,6 +85,15 @@ const int characterIndicatorLengths[3][3] = {
   {14, 13, 16}  // Version 27 - 40
 };
 
+// Number of remainder bits to end the encoded data with.
+// Index by version.
+const int remainderBits[40] = {
+  0, 7, 7, 7, 7, 7, 0, 0, 0, 0, 0, 
+  0, 0, 3, 3, 3, 3, 3, 3, 3, 4, 4,
+  4, 4, 4, 4, 4, 3, 3, 3, 3, 3, 3,
+  3, 0, 0, 0, 0, 0, 0
+};
+
 // Error correction codewords and block information based on version and encoding mode
 // First index by version (1-40)
 // Then index by error correction level. See the ErrorCorrection enum
