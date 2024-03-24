@@ -88,6 +88,10 @@ private:
   void drawFinderPattern(int startX, int startY);
   void drawAlignmentPatterns();
 
+  // Draw alternating black and white modules along the
+  // sixth column and row
+  void drawTimingPatterns();
+
   int _size;
   int _moduleSize;
   int _version;
@@ -132,6 +136,12 @@ void QRImage::drawFinderPattern(int startX, int startY) {
     setModule(rowX + i, rowY, false);
     setModule(colX, colY - i, false);
   }
+
+  // Draw dark module at the side of the bottom
+  // left finder pattern
+  if (startX == 0 && startY == _size - 7) {
+    setModule(colX + 1, rowY, true);
+  }
 }
 
 void QRImage::drawAlignmentPatterns() {
@@ -150,6 +160,20 @@ void QRImage::drawAlignmentPatterns() {
   }
 }
 
+void QRImage::drawTimingPatterns() {
+  for (int i = 0; i < _size; i++) {
+    int colorX = getModule(i, 6);
+    if (colorX == BLANK) {
+      setModule(i, 6, i % 2 == 0);
+    }
+
+    int colorY = getModule(6, i);
+    if (colorY == BLANK) {
+      setModule(6, i, i % 2 == 0);
+    }
+  }
+}
+
 void QRImage::create() {
   _encoder.encode();
   _moduleSize = 1;
@@ -161,10 +185,10 @@ void QRImage::create() {
   drawFinderPattern(0, 0); // Top right corner
   drawFinderPattern(0, _size - 7); // Bottom right corner
   drawFinderPattern(_size - 7, 0); // Top left corner
-
   if (_version > 1) {
     drawAlignmentPatterns();
   } 
+  drawTimingPatterns();
 
   _img.save("output.png");
 }
