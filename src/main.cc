@@ -175,36 +175,38 @@ void QR::reserveFormatInfoArea() {
   }
 }
 
-// TODO: support edge cases
 void QR::drawEncodedData() {
-  // Start at bottom right corner
+  int i = 0;
   int x = _size - 1;
   int y = _size - 1;
-  int direction = -1; // -1 : up, 1 : down
-
+  int direction = -1;
   // Go right, left, up, repeat when going upwards
   // Go right, left, down, repeat when going downwards
-  for (int i = 0; i < _data.bits.size() && x >= 0; i++) {
-    Color rightColor = _data.bits[i] ? BLACK : WHITE;
-    setModule(x, y, rightColor);
-
-    Color leftColor = _data.bits[i + 1] ? BLACK : WHITE;
-    setModule(x - 1, y, leftColor);
-
-    bool canGoUp = y - 1 >= 0 && getModule(x, y - 1) == NOT_SET;
-    bool canGoDown = y + 1 < _size && getModule(x, y + 1) == NOT_SET;
-    if (direction == -1 && !canGoUp) {
-      direction = 1;
-      y -= 1;
-      x -= 2;
-    } else if (direction == 1 && !canGoDown) {
-      direction = -1;
-      y += 1;
-      x -= 2;
+  while (x >= 0) {
+    if (getModule(x, y) == NOT_SET) {
+      Color rightColor = _data.bits[i] ? BLACK : WHITE;
+      setModule(x, y, rightColor);
+      i += 1;
     }
 
-    y += direction;
-    i += 2;
+    if (getModule(x - 1, y) == NOT_SET) {
+      Color leftColor = _data.bits[i] ? BLACK : WHITE;
+      setModule(x - 1, y, leftColor);
+      i += 1;
+    }
+
+    if (direction == -1 && y - 1 < 0) {
+      direction = 1;
+      x -= 2;
+    } else if (direction == 1 && y + 1 >= _size) {
+      direction = -1;
+      x -= 2;
+    } else {
+      y += direction;
+    }
+
+    // Skip vertical timing pattern
+    if (x == 6) x -= 1;
   }
 }
 
