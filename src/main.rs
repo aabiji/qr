@@ -81,21 +81,27 @@ fn create_bitstream<T: bitstream_io::Numeric>(bits: u32, value: T) -> Vec<u8> {
     writer.into_writer()
 }
 
-struct Bistream {
+struct Bitstream {
     pub data: Vec<u8>,
 }
 
-impl Bistream {
+impl Bitstream {
     pub fn new() -> Self {
         Self {
             data: Vec::new(),
         }
     }
 
-    pub fn write<T: num::Integer>(num_bits: u32, data: T) {
+    pub fn write<T: num::Integer + Into<u128>>(&mut self, bit_length: u32, data: T) {
         // data is x bits long
         // we want to write num_bits to our stream
         // making sure that leading bytes are at the front
+        let mut copy: u128 = data.into();
+        let mut required_bits = 0;
+        while copy > 0 {
+            copy = copy >> 1;
+            required_bits += 1;
+        }
     }
 }
 
@@ -103,6 +109,7 @@ fn numeric_encode(input: &str) -> (Vec<u8>, u32) {
     let mut bitstream = BitWriter::endian(Vec::new(), BigEndian);
     let mut total_bits = 0;
     let mut i = 0;
+    let mut ex = Bitstream::new();
     while i < input.len() {
         let end = std::cmp::min(i + 3, input.len());
         let group = &input[i..end];
@@ -115,6 +122,7 @@ fn numeric_encode(input: &str) -> (Vec<u8>, u32) {
         println!("{value}");
         // bitstream_io doesn't seem to write leading 0s, but we really need that
         bitstream.write(num_bits, value).unwrap();
+        ex.write(num_bits, value);
         total_bits += num_bits;
         i += 3;
     }
