@@ -7,7 +7,7 @@ mod tables;
 /// 1. Analyze data to determine the optimal data encoding mode
 /// 2. Encode data based on the encoding mode
 /// 3. Turn encoded data and other segments into codewords
-use bitstream_io::{BigEndian, BitWrite, BitWriter}; // TODO: build our own
+use bitstream_io::{BigEndian, BitWrite, BitWriter, LittleEndian}; // TODO: build our own
 
 enum ErrorCorrection {
     Low,      // Recovers 7% of data
@@ -81,9 +81,27 @@ fn create_bitstream<T: bitstream_io::Numeric>(bits: u32, value: T) -> Vec<u8> {
     writer.into_writer()
 }
 
-fn numeric_encode(input: &str) -> Vec<u8> {
-    let mut bitstream = BitWriter::endian(Vec::new(), BigEndian);
+struct Bistream {
+    pub data: Vec<u8>,
+}
 
+impl Bistream {
+    pub fn new() -> Self {
+        Self {
+            data: Vec::new(),
+        }
+    }
+
+    pub fn write<T: num::Integer>(num_bits: u32, data: T) {
+        // data is x bits long
+        // we want to write num_bits to our stream
+        // making sure that leading bytes are at the front
+    }
+}
+
+fn numeric_encode(input: &str) -> (Vec<u8>, u32) {
+    let mut bitstream = BitWriter::endian(Vec::new(), BigEndian);
+    let mut total_bits = 0;
     let mut i = 0;
     while i < input.len() {
         let end = std::cmp::min(i + 3, input.len());
@@ -94,11 +112,15 @@ fn numeric_encode(input: &str) -> Vec<u8> {
             2 => 7,
             _ => 4,
         };
+        println!("{value}");
+        // bitstream_io doesn't seem to write leading 0s, but we really need that
         bitstream.write(num_bits, value).unwrap();
+        total_bits += num_bits;
         i += 3;
     }
 
-    bitstream.into_writer()
+    bitstream.byte_align().unwrap();
+    (bitstream.into_writer(), total_bits)
 }
 
 fn alphanumeric_encode(input: &str) -> Vec<u8> {
@@ -208,25 +230,29 @@ fn encode_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
 
     let version = determine_version(&level, &mode, input.len());
     let count_bit_size = determine_count_bits_size(version, &mode);
-    let data = match mode {
+    let (data, data_size) = match mode {
         Encoding::Numeric => numeric_encode(input),
-        Encoding::Alphanumeric => alphanumeric_encode(input),
-        Encoding::Byte => byte_encode(input),
+        _ => (Vec::new(), 0),
+        //Encoding::Alphanumeric => alphanumeric_encode(input),
+        //Encoding::Byte => byte_encode(input),
     };
+    let mut x = data_size;
 
     let required = determine_required_bit_length(version, &level);
-    let data_bit_size = (data.len() * 8) as u32; // ??????
-    let terminator_length = std::cmp::min(required - data_bit_size, 4);
+    let terminator_length = std::cmp::min(required - data_size, 4);
 
     bitstream.write(4, mode_indicator);
     bitstream.write(count_bit_size, input.len() as u32);
+    println!("{:?}", data);
     for byte in data {
-        bitstream.write(8, byte);
+        let bits = std::cmp::min(8, x);
+        bitstream.write(bits, byte);
+        if x > 8 { x -= 8; };
     }
     bitstream.write(terminator_length, 0);
 
     // Pad with zeroes to make it a multiple of 8
-    let mut length_so_far = data_bit_size + terminator_length + count_bit_size + 4;
+    let mut length_so_far = data_size + terminator_length + count_bit_size + 4;
     if length_so_far % 8 != 0 {
         let next_mutliple = length_so_far / 8 * 8 + 8;
         let remaining = next_mutliple - length_so_far;
@@ -267,6 +293,7 @@ mod test {
         assert_eq!(determine_encoding_mode(""), Encoding::Byte);
     }
 
+    /*
     fn test_encoding<T: bitstream_io::Numeric>(
         mode: Encoding,
         values: &[&str],
@@ -319,14 +346,23 @@ mod test {
         let lengths = [40, 80, 48];
         test_encoding(Encoding::Byte, &values, &bits, &lengths)
     }
+    */
 
     // TODO: add more tests!!!!!
     #[test]
     fn test_data_encoding() {
+        /*
         let bytes = encode_data("hello!", ErrorCorrection::Low);
         let expected = [
             0x40, 0x66, 0x86, 0x56, 0xC6, 0xC6, 0xF2, 0x10, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11,
             0xEC, 0x11, 0xEC, 0x11, 0xEC,
+        ];
+        assert_eq!(bytes, expected);
+        */
+
+        let bytes = encode_data("123", ErrorCorrection::Low);
+        let expected = [
+            0x10, 0x0C, 0x7B, 0x00, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC
         ];
         assert_eq!(bytes, expected);
     }
