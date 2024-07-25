@@ -1,10 +1,12 @@
 #![allow(unused)]
-use core::num;
+
+mod tables;
 
 /// Building a qr code generator:
 /// Steps:
 /// 1. Analyze data to determine the optimal data encoding mode
 /// 2. Encode data based on the encoding mode
+/// 3. Turn encoded data and other segments into codewords
 use bitstream_io::{BigEndian, BitWrite, BitWriter}; // TODO: build our own
 
 enum ErrorCorrection {
@@ -22,9 +24,9 @@ enum Encoding {
 }
 
 fn is_alphanumeric(codepoint: char) -> bool {
-    let num_range = '0'..'9';
-    let char_range = 'A'..'Z';
-    let special = match codepoint {
+    match codepoint {
+        '0'..='9' => true,
+        'A'..='Z' => true,
         ' ' => true,
         '$' => true,
         '%' => true,
@@ -35,8 +37,7 @@ fn is_alphanumeric(codepoint: char) -> bool {
         '/' => true,
         ':' => true,
         _ => false,
-    };
-    num_range.contains(&codepoint) || char_range.contains(&codepoint) || special
+    }
 }
 
 fn alphanumeric_value(codepoint: char) -> u16 {
@@ -145,6 +146,109 @@ fn byte_encode(input: &str) -> Vec<u8> {
     bitstream.into_writer()
 }
 
+// TODO: cleanup please
+fn mode_index(mode: &Encoding) -> usize {
+    match mode {
+        Encoding::Numeric => 0,
+        Encoding::Alphanumeric => 1,
+        Encoding::Byte => 2,
+    }
+}
+
+fn correction_index(level: &ErrorCorrection) -> usize {
+    match level {
+        ErrorCorrection::Low => 0,
+        ErrorCorrection::Medium => 1,
+        ErrorCorrection::Quantile => 2,
+        ErrorCorrection::High => 3,
+    }
+}
+
+fn get_character_capacity(level: &ErrorCorrection, mode: &Encoding, version: usize) -> u16 {
+    tables::CHARACTER_CAPACITIES[version - 1][correction_index(level)][mode_index(mode)]
+}
+
+// Minimum qr version that can hold the data
+fn determine_version(level: &ErrorCorrection, mode: &Encoding, num_chars: usize) -> usize {
+    let mut version = 1;
+    loop {
+        let capacity = get_character_capacity(&level, &mode, version);
+        if num_chars <= capacity as usize {
+            break;
+        }
+        version += 1;
+    }
+    version
+}
+
+fn determine_count_bits_size(version: usize, mode: &Encoding) -> u32 {
+    let index = mode_index(mode);
+    if version >= 1 && version <= 9 {
+        return tables::COUNT_SIZES[0][index];
+    } else if version >= 10 && version <= 26 {
+        return tables::COUNT_SIZES[1][index];
+    }
+    tables::COUNT_SIZES[2][index]
+}
+
+fn determine_required_bit_length(version: usize, level: &ErrorCorrection) -> u32 {
+    let i = correction_index(&level);
+    tables::ECC_DATA[version - 1][i][0] * 8
+}
+
+fn encode_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
+    let mut bitstream = BitWriter::endian(Vec::new(), BigEndian);
+
+    let mode = determine_encoding_mode(input);
+    let mode_indicator = match mode {
+        Encoding::Numeric => 1,
+        Encoding::Alphanumeric => 2,
+        Encoding::Byte => 4,
+    };
+
+    let version = determine_version(&level, &mode, input.len());
+    let count_bit_size = determine_count_bits_size(version, &mode);
+    let data = match mode {
+        Encoding::Numeric => numeric_encode(input),
+        Encoding::Alphanumeric => alphanumeric_encode(input),
+        Encoding::Byte => byte_encode(input),
+    };
+
+    let required = determine_required_bit_length(version, &level);
+    let data_bit_size = (data.len() * 8) as u32; // ??????
+    let terminator_length = std::cmp::min(required - data_bit_size, 4);
+
+    bitstream.write(4, mode_indicator);
+    bitstream.write(count_bit_size, input.len() as u32);
+    for byte in data {
+        bitstream.write(8, byte);
+    }
+    bitstream.write(terminator_length, 0);
+
+    // Pad with zeroes to make it a multiple of 8
+    let mut length_so_far = data_bit_size + terminator_length + count_bit_size + 4;
+    if length_so_far % 8 != 0 {
+        let next_mutliple = length_so_far / 8 * 8 + 8;
+        let remaining = next_mutliple - length_so_far;
+        for _ in 0..remaining {
+            bitstream.write_bit(false);
+            length_so_far += 1;
+        }
+    }
+
+    // Add pad bytes if the bitstream is still up to the required length
+    let remaining_bytes = (required - length_so_far) / 8;
+    for i in 0..remaining_bytes {
+        if i % 2 == 0 {
+            bitstream.write(8, 236);
+        } else {
+            bitstream.write(8, 17);
+        }
+    }
+
+    bitstream.into_writer()
+}
+
 #[cfg(test)]
 mod test {
     use bitstream_io::BigEndian;
@@ -214,6 +318,17 @@ mod test {
         ];
         let lengths = [40, 80, 48];
         test_encoding(Encoding::Byte, &values, &bits, &lengths)
+    }
+
+    // TODO: add more tests!!!!!
+    #[test]
+    fn test_data_encoding() {
+        let bytes = encode_data("hello!", ErrorCorrection::Low);
+        let expected = [
+            0x40, 0x66, 0x86, 0x56, 0xC6, 0xC6, 0xF2, 0x10, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11,
+            0xEC, 0x11, 0xEC, 0x11, 0xEC,
+        ];
+        assert_eq!(bytes, expected);
     }
 }
 
