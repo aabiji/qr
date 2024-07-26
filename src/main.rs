@@ -243,7 +243,7 @@ fn encode_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
 
     let mode_size = 4;
     let required_size = get_required_bit_length(version, &level);
-    println!("{required_size} {}", version);
+    println!("{required_size} {version} {input}");
     let terminator_size = std::cmp::min(required_size - encoded_data.size_in_bits, 4);
 
     // Write mode and count bits
@@ -384,12 +384,10 @@ mod test {
         ];
         assert_eq!(bytes, expected);
 
-        let bytes = encode_data("lorem ipsum sit dolor amed", ErrorCorrection::Quartile);
+        let bytes = encode_data("LOREM IPSUM SIT DOLOR AMED", ErrorCorrection::Quartile);
         let expected = [
-            0x41, 0xA6, 0xC6, 0xF7, 0x26, 0x56, 0xD2, 0x06, 0x97, 0x07,
-            0x37, 0x56, 0xD2, 0x07, 0x36, 0x97, 0x42, 0x06, 0x46, 0xF6,
-            0xC6, 0xF7, 0x22, 0x06, 0x16, 0xD6, 0x56, 0x40, 0xEC, 0x11,
-            0xEC, 0x11, 0xEC, 0x11
+            0x20, 0xD3, 0xC9, 0x99, 0xB0, 0x09, 0xA1, 0xD0, 0xA8, 0x05,
+            0x3F, 0xA9, 0xEA, 0x61, 0x79, 0x33, 0x8C, 0xEC, 0x28, 0x30, 0xEC, 0x11
         ];
         assert_eq!(bytes, expected);
     }

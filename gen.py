@@ -3,7 +3,9 @@ data = {1: {'L': [7, 1, 19, 0, 0], 'M': [10, 1, 16, 0, 0], 'Q': [13, 1, 13, 0, 0
 for version in data:
     row = f"["
     for level in data[version]:
-        row += f"[{data[version][level][0]}]"
+        arr = data[version][level]
+        total = arr[1] * arr[2] + arr[3] * arr[4]
+        row += f"[{total}]"
         if level != "H":
             row += ","
     row += "]"
