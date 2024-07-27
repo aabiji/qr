@@ -259,7 +259,7 @@ fn encode_data(input: &str, level: &ErrorCorrection) -> Vec<u8> {
 
 // Use the Reed-Solomon algorithm to generate error correction codes
 // for our encoded data
-fn generate_error_correction_codes(data: &Vec<u8>, level: ErrorCorrection, version: usize) -> Vec<u8> {
+fn generate_error_correction_codes(data: &Vec<u8>, level: &ErrorCorrection, version: usize) -> Vec<u8> {
     let data_codeword_count = data.len();
     let ecc_count = tables::get_error_codeword_count(version, correction_index(&level));
     let length: usize = data_codeword_count + ecc_count;
@@ -305,6 +305,72 @@ fn generate_error_correction_codes(data: &Vec<u8>, level: ErrorCorrection, versi
         error_correction_codewords.push(byte);
     }
     error_correction_codewords
+}
+
+fn structure_qr_data(input: &str, level: &ErrorCorrection) -> Vec<u8> {
+    let data = encode_data(input, level);
+    let mode = get_encoding_mode(input);
+    let version = get_version(level, &mode, input.len());
+
+    let info = tables::ECC_DATA[version - 1][correction_index(level)];
+    let group_block_counts = [info[1], info[3]];
+    let codeword_counts = [info[2], info[4]];
+
+    // Split the data into groups and blocks
+    let mut data_groups: Vec<Vec<Vec<u8>>> = Vec::new();
+    data_groups.push(Vec::new()); // First group
+    data_groups.push(Vec::new()); // Second group
+    let mut index = 0;
+    for group in 0..2 {
+        let num_blocks = group_block_counts[group];
+        for _ in 0..num_blocks {
+            let mut block = Vec::new();
+            let codeword_count = codeword_counts[group];
+            for _ in 0..codeword_count {
+                block.push(data[index]);
+                index += 1;
+            }
+            data_groups[group].push(block);
+        }
+    }
+
+    // Generate error correction codes for each group
+    let mut ecc_groups: Vec<Vec<Vec<u8>>> = Vec::new();
+    ecc_groups.push(Vec::new());
+    ecc_groups.push(Vec::new());
+    for group in 0..2 {
+        for block in data_groups[group].clone() {
+            let codes = generate_error_correction_codes(&block, &level, version);
+            ecc_groups[group].push(codes);
+        }
+    }
+
+    let mut interleaved_data = Vec::new();
+
+    // Interleave the data blocks
+    let max_length = std::cmp::max(codeword_counts[0], codeword_counts[1]) as usize;
+    for i in 0..max_length {
+        for group in 0..2 {
+            for block in data_groups[group].clone() {
+                if i < block.len() {
+                    interleaved_data.push(block[i]);
+                }
+            }
+        }
+    }
+
+    // Interleave the error correction blocks
+    for i in 0..info[0] as usize {
+        for group in 0..2 {
+            for block in ecc_groups[group].clone() {
+                if i < block.len() {
+                    interleaved_data.push(block[i]);
+                }
+            }
+        }
+    }
+
+    interleaved_data
 }
 
 #[cfg(test)]
@@ -414,14 +480,35 @@ mod test {
         assert_eq!(bytes, expected);
     }
 
+    // TODO: the implementation is wrong
     #[test]
     fn test_error_correction_coding() {
         let level = ErrorCorrection::High;
         let version = 1;
         let bytes = vec![32, 65, 205, 69, 41, 220, 46, 128, 236];
-        let correction_codes = generate_error_correction_codes(&bytes, level, version);
+        let correction_codes = generate_error_correction_codes(&bytes, &level, version);
         let expected = [42, 159, 74, 221, 244, 169, 239, 150, 138, 70, 237, 85, 224, 96, 74, 219, 61];
         assert_eq!(correction_codes, expected);
+
+        let level = ErrorCorrection::Low;
+        let version = 1;
+        let bytes = vec![0x40, 0x56, 0x86, 0x56, 0xC6, 0xC6, 0xF0,
+                                  0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11];
+        let correction_codes = generate_error_correction_codes(&bytes, &level, version);
+        let expected = [0x25, 0x19, 0xD0, 0xD2, 0x68, 0x59, 0x39];
+        assert_eq!(correction_codes, expected);
+    }
+
+    #[test]
+    fn structure_encoded_data() {
+        let input = "hello";
+        let level = &ErrorCorrection::Low;
+        let data = structure_qr_data(input, level);
+        let expected = [0x40, 0x56, 0x86, 0x56, 0xC6, 0xC6, 0xF0,
+                                   0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC,
+                                   0x11, 0xEC, 0x11, 0xEC, 0x11, 0x25, 0x19, 0xD0,
+                                   0xD2, 0x68, 0x59, 0x39];
+        assert_eq!(data, expected);
     }
 }
 

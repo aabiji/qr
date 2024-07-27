@@ -67,11 +67,11 @@ pub fn get_character_capacity(error_index: usize, mode_index: usize, version: us
 // Index by version, then error correction level
 // Indexes then are:
 // 0: Number of error correction codes per block
-// 1: Block 1 count
+// 1: Number of blocks in the first group
 // 2: Number of data codewords in block 1
-// 3: Block 2 count
+// 3: Number of blocks in the second group
 // 4: Number of data codewords in block 2
-const ECC_DATA: [[[u32; 5]; 4]; 40] = [
+pub const ECC_DATA: [[[u32; 5]; 4]; 40] = [
     [[7, 1, 19, 0, 0],[10, 1, 16, 0, 0],[13, 1, 13, 0, 0],[17, 1, 9, 0, 0]],
     [[10, 1, 34, 0, 0],[16, 1, 28, 0, 0],[22, 1, 22, 0, 0],[28, 1, 16, 0, 0]],
     [[15, 1, 55, 0, 0],[26, 1, 44, 0, 0],[18, 2, 17, 0, 0],[22, 2, 13, 0, 0]],
