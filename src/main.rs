@@ -1,12 +1,7 @@
 #![allow(unused)]
 
 mod tables;
-
-/// Building a qr code generator:
-/// Steps:
-/// 1. Analyze data to get the optimal data encoding mode
-/// 2. Encode data based on the encoding mode
-/// 3. Turn encoded data and other segments into codewords
+use std::collections::VecDeque;
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 
 enum ErrorCorrection {
@@ -188,16 +183,11 @@ fn correction_index(level: &ErrorCorrection) -> usize {
     }
 }
 
-// Get the number of characters that can be held in a given qr code
-fn get_character_capacity(level: &ErrorCorrection, mode: &Encoding, version: usize) -> u16 {
-    tables::CHARACTER_CAPACITIES[version - 1][correction_index(level)][mode_index(mode)]
-}
-
 // Get the minimum qr version that can hold the data
 fn get_version(level: &ErrorCorrection, mode: &Encoding, num_chars: usize) -> usize {
     let mut version = 1;
     loop {
-        let capacity = get_character_capacity(&level, &mode, version);
+        let capacity = tables::get_character_capacity(correction_index(level), mode_index(mode), version);
         if num_chars <= capacity as usize {
             break;
         }
@@ -206,24 +196,7 @@ fn get_version(level: &ErrorCorrection, mode: &Encoding, num_chars: usize) -> us
     version
 }
 
-// Get the number of bits needed to encode the encoded data's size
-fn get_count_bits_size(version: usize, mode: &Encoding) -> u32 {
-    let index = mode_index(mode);
-    if version >= 1 && version <= 9 {
-        return tables::COUNT_SIZES[0][index];
-    } else if version >= 10 && version <= 26 {
-        return tables::COUNT_SIZES[1][index];
-    }
-    tables::COUNT_SIZES[2][index]
-}
-
-// Get the size that the encoded data is required to be
-fn get_required_bit_length(version: usize, level: &ErrorCorrection) -> u32 {
-    let i = correction_index(&level);
-    tables::ECC_DATA[version - 1][i][0] * 8
-}
-
-fn encode_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
+fn encode_data(input: &str, level: &ErrorCorrection) -> Vec<u8> {
     let mut bitstream = BitWriter::endian(Vec::new(), BigEndian);
 
     let mode = get_encoding_mode(input);
@@ -234,7 +207,7 @@ fn encode_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
     };
 
     let version = get_version(&level, &mode, input.len());
-    let count_bit_size = get_count_bits_size(version, &mode);
+    let count_bit_size = tables::get_count_bits_size(version, mode_index(&mode));
     let encoded_data = match mode {
         Encoding::Numeric => numeric_encode(input),
         Encoding::Alphanumeric => alphanumeric_encode(input),
@@ -242,8 +215,7 @@ fn encode_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
     };
 
     let mode_size = 4;
-    let required_size = get_required_bit_length(version, &level);
-    println!("{required_size} {version} {input}");
+    let required_size = tables::get_required_bit_length(version, correction_index(&level));
     let terminator_size = std::cmp::min(required_size - encoded_data.size_in_bits, 4);
 
     // Write mode and count bits
@@ -283,6 +255,56 @@ fn encode_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
     }
 
     bitstream.into_writer()
+}
+
+// Use the Reed-Solomon algorithm to generate error correction codes
+// for our encoded data
+fn generate_error_correction_codes(data: &Vec<u8>, level: ErrorCorrection, version: usize) -> Vec<u8> {
+    let data_codeword_count = data.len();
+    let ecc_count = tables::get_error_codeword_count(version, correction_index(&level));
+    let length: usize = data_codeword_count + ecc_count;
+    let generator_polynomial = tables::get_generator_polynomial(ecc_count);
+
+    // Create a array with the data and `ecc_count` zeroes at the end
+    let mut buffer = VecDeque::with_capacity(length);
+    for codeword in data.clone() {
+        buffer.push_back(codeword);
+    }
+    for _ in 0..ecc_count {
+        buffer.push_back(0);
+    }
+
+    for i in 0..data_codeword_count {
+        let mut generator = generator_polynomial.clone();
+        let number = buffer.pop_front().unwrap(); // Get the first value and shift the buffer to the left
+        if number == 0 {
+            continue;
+        }
+        let exponent = tables::get_galois_antilog(number as usize);
+
+        for j in 0..generator.len() {
+            let real_value: u32 = generator_polynomial[j] as u32 + exponent as u32;
+            let galois_value = (real_value % 255) as u8;
+            let log = tables::get_galois_log(galois_value as usize);
+            generator[j] = log ^ buffer[j];
+        }
+
+        // The generator is our new buffer
+        buffer = generator.clone();
+        if i == data_codeword_count - 1 {
+            continue; // Don't pad the final buffer
+        }
+        // Pad with zeroes to fill the buffer back to its original length
+        for _ in 0..length - buffer.len() {
+            buffer.push_back(0);
+        }
+    }
+
+    let mut error_correction_codewords = Vec::new();
+    for byte in buffer {
+        error_correction_codewords.push(byte);
+    }
+    error_correction_codewords
 }
 
 #[cfg(test)]
@@ -359,37 +381,47 @@ mod test {
 
     #[test]
     fn test_data_encoding() {
-        let bytes = encode_data("hello!", ErrorCorrection::Low);
+        let bytes = encode_data("hello!", &ErrorCorrection::Low);
         let expected = [
             0x40, 0x66, 0x86, 0x56, 0xC6, 0xC6, 0xF2, 0x10, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11,
             0xEC, 0x11, 0xEC, 0x11, 0xEC,
         ];
         assert_eq!(bytes, expected);
 
-        let bytes = encode_data("123", ErrorCorrection::Low);
+        let bytes = encode_data("123", &ErrorCorrection::Low);
         let expected = [
             0x10, 0x0C, 0x7B, 0x00, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC
         ];
         assert_eq!(bytes, expected);
 
-        let bytes = encode_data("aЉ윇😱", ErrorCorrection::Medium);
+        let bytes = encode_data("aЉ윇😱", &ErrorCorrection::Medium);
         let expected = [
             0x40, 0xA6, 0x1D, 0x08, 0x9E, 0xC9, 0xC8, 0x7F, 0x09, 0xF9, 0x8B, 0x10, 0xEC, 0x11, 0xEC, 0x11
         ];
         assert_eq!(bytes, expected);
 
-        let bytes = encode_data("", ErrorCorrection::High);
+        let bytes = encode_data("", &ErrorCorrection::High);
         let expected = [
             0x40, 0x00, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC
         ];
         assert_eq!(bytes, expected);
 
-        let bytes = encode_data("LOREM IPSUM SIT DOLOR AMED", ErrorCorrection::Quartile);
+        let bytes = encode_data("LOREM IPSUM SIT DOLOR AMED", &ErrorCorrection::Quartile);
         let expected = [
             0x20, 0xD3, 0xC9, 0x99, 0xB0, 0x09, 0xA1, 0xD0, 0xA8, 0x05,
             0x3F, 0xA9, 0xEA, 0x61, 0x79, 0x33, 0x8C, 0xEC, 0x28, 0x30, 0xEC, 0x11
         ];
         assert_eq!(bytes, expected);
+    }
+
+    #[test]
+    fn test_error_correction_coding() {
+        let level = ErrorCorrection::High;
+        let version = 1;
+        let bytes = vec![32, 65, 205, 69, 41, 220, 46, 128, 236];
+        let correction_codes = generate_error_correction_codes(&bytes, level, version);
+        let expected = [42, 159, 74, 221, 244, 169, 239, 150, 138, 70, 237, 85, 224, 96, 74, 219, 61];
+        assert_eq!(correction_codes, expected);
     }
 }
 
