@@ -200,12 +200,6 @@ fn get_required_bit_length(version: usize, level: ErrorCorrection) -> u32 {
     (block1_size + block2_size) * 8
 }
 
-// Return the number of error correction codewords in a block given the error
-// correction level and version
-fn get_error_codeword_count(version: usize, level: ErrorCorrection) -> usize {
-    tables::ECC_DATA[version - 1][level as usize][0] as usize
-}
-
 fn encode_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
     let mut bitstream = BitWriter::endian(Vec::new(), BigEndian);
 
@@ -334,7 +328,7 @@ fn generate_error_correction_codes(
     level: ErrorCorrection,
     version: usize,
 ) -> Vec<u8> {
-    let ecc_count = get_error_codeword_count(version, level);
+    let ecc_count = tables::ECC_DATA[version - 1][level as usize][0] as usize;
     let generator_polynomial = get_generator_polynomial(ecc_count);
 
     // The coefficients of the message polynomial correspond to the data bytes
@@ -366,64 +360,44 @@ pub fn assemble_qr_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
     let version = get_version(level, mode, input.len());
 
     let info = tables::ECC_DATA[version - 1][level as usize];
-    let group_block_counts = [info[1], info[3]];
-    let codeword_counts = [info[2], info[4]];
+    let ecc_count = info[0] as usize;
+    let block_counts = [info[1] as usize, info[3] as usize];
+    let block_lengths = [info[2] as usize, info[4] as usize];
 
-    // Split the data into groups and blocks
-    let mut data_groups: Vec<Vec<Vec<u8>>> = Vec::new();
-    data_groups.push(Vec::new()); // First group
-    data_groups.push(Vec::new()); // Second group
-    let mut index = 0;
-    for group in 0..2 {
-        let num_blocks = group_block_counts[group];
-        for _ in 0..num_blocks {
-            let mut block = Vec::new();
-            let codeword_count = codeword_counts[group];
-            for _ in 0..codeword_count {
-                block.push(data[index]);
-                index += 1;
-            }
-            data_groups[group].push(block);
-        }
-    }
+    let mut error_codewords = Vec::new();
+    let mut interleaved = Vec::new();
 
-    // Generate error correction codes for each group
-    let mut ecc_groups: Vec<Vec<Vec<u8>>> = Vec::new();
-    ecc_groups.push(Vec::new());
-    ecc_groups.push(Vec::new());
-    for group in 0..2 {
-        for block in data_groups[group].clone() {
-            let codes = generate_error_correction_codes(&block, level, version);
-            ecc_groups[group].push(codes);
-        }
-    }
-
-    let mut interleaved_data = Vec::new();
-
-    // Interleave the data blocks
-    let max_length = std::cmp::max(codeword_counts[0], codeword_counts[1]) as usize;
+    // Generate error correction codewords for each block
+    // and interleave the data codewords
+    let max_length = std::cmp::max(block_lengths[0], block_lengths[1]);
     for i in 0..max_length {
         for group in 0..2 {
-            for block in data_groups[group].clone() {
-                if i < block.len() {
-                    interleaved_data.push(block[i]);
+            for j in 0..block_counts[group] {
+                let group_length = block_counts[group] * block_lengths[group];
+                let index = group * group_length + j * block_lengths[group] + i;
+                if i >= block_lengths[group] {
+                    continue;
+                } else if i == 0 {
+                    let block = data[index..index + block_lengths[group]].to_vec();
+                    error_codewords.extend(generate_error_correction_codes(&block, level, version));
                 }
+                interleaved.push(data[index]);
             }
         }
     }
 
-    // Interleave the error correction blocks
-    for i in 0..info[0] as usize {
+    // Interleave the error correction codewords
+    for i in 0..ecc_count {
         for group in 0..2 {
-            for block in ecc_groups[group].clone() {
-                if i < block.len() {
-                    interleaved_data.push(block[i]);
-                }
+            for j in 0..block_counts[group] {
+                let group_length = block_counts[group] * ecc_count;
+                let index = group * group_length + j * ecc_count + i;
+                interleaved.push(error_codewords[index]);
             }
         }
     }
 
-    interleaved_data
+    interleaved
 }
 
 #[cfg(test)]
@@ -546,7 +520,10 @@ mod test {
         assert_eq!(correction_codes, expected);
 
         let level = ErrorCorrection::Medium;
-        let bytes = vec![0x10, 0x0C, 0x7B, 0x00, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11];
+        let bytes = vec![
+            0x10, 0x0C, 0x7B, 0x00, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11,
+            0xEC, 0x11,
+        ];
         let correction_codes = generate_error_correction_codes(&bytes, level, version);
         let expected = [0x1C, 0x53, 0xB9, 0x9F, 0x2B, 0xD5, 0xE3, 0x6D, 0x0E, 0x70];
         assert_eq!(correction_codes, expected);
@@ -555,26 +532,27 @@ mod test {
     #[test]
     fn test_data_assembly() {
         let data = assemble_qr_data("hello", ErrorCorrection::Low);
-        let expected = [0x40, 0x56, 0x86, 0x56, 0xC6, 0xC6, 0xF0,
-                                   0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC,
-                                   0x11, 0xEC, 0x11, 0xEC, 0x11, 0x25, 0x19, 0xD0,
-                                   0xD2, 0x68, 0x59, 0x39];
+        let expected = [
+            0x40, 0x56, 0x86, 0x56, 0xC6, 0xC6, 0xF0, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC,
+            0x11, 0xEC, 0x11, 0xEC, 0x11, 0x25, 0x19, 0xD0, 0xD2, 0x68, 0x59, 0x39,
+        ];
         assert_eq!(data, expected);
 
         let data = assemble_qr_data("LOREM IPSUM SIT DOLOR AMED", ErrorCorrection::High);
-        let expected = [0x20, 0x61, 0xD3, 0x79, 0xC9, 0x33, 0x99, 0x8C, 0xB0, 0xEC,
-                        0x09, 0x28, 0xA1, 0x30, 0xD0, 0xEC, 0xA8, 0x11, 0x05, 0xEC,
-                        0x3F, 0x11, 0xA9, 0xEC, 0xEA, 0x11, 0x98, 0x12, 0x7A, 0x31,
-                        0x0E, 0x41, 0x36, 0x26, 0x5B, 0xDF, 0x43, 0x34, 0x0C, 0x33,
-                        0x00, 0x8B, 0x32, 0xDB, 0x28, 0x54, 0x3F, 0xE1, 0x62, 0x6C,
-                        0xDF, 0x3B, 0x08, 0x65, 0x12, 0xD0, 0x35, 0xF8, 0xF0, 0x75,
-                        0x1A, 0x77, 0x6D, 0x49, 0x01, 0x89, 0xB1, 0x79, 0xF4, 0x76];
+        let expected = [
+            0x20, 0x61, 0xD3, 0x79, 0xC9, 0x33, 0x99, 0x8C, 0xB0, 0xEC, 0x09, 0x28, 0xA1, 0x30,
+            0xD0, 0xEC, 0xA8, 0x11, 0x05, 0xEC, 0x3F, 0x11, 0xA9, 0xEC, 0xEA, 0x11, 0x98, 0x12,
+            0x7A, 0x31, 0x0E, 0x41, 0x36, 0x26, 0x5B, 0xDF, 0x43, 0x34, 0x0C, 0x33, 0x00, 0x8B,
+            0x32, 0xDB, 0x28, 0x54, 0x3F, 0xE1, 0x62, 0x6C, 0xDF, 0x3B, 0x08, 0x65, 0x12, 0xD0,
+            0x35, 0xF8, 0xF0, 0x75, 0x1A, 0x77, 0x6D, 0x49, 0x01, 0x89, 0xB1, 0x79, 0xF4, 0x76,
+        ];
         assert_eq!(data, expected);
 
         let data = assemble_qr_data("aЉ윇😱", ErrorCorrection::Medium);
-        let expected = [0x40, 0xA6, 0x1D, 0x08, 0x9E, 0xC9, 0xC8, 0x7F, 0x09, 0xF9,
-                        0x8B, 0x10, 0xEC, 0x11, 0xEC, 0x11, 0xBB, 0x3A, 0x1D, 0x62,
-                        0x99, 0x9D, 0xD8, 0xFF, 0xA9, 0x0C];
+        let expected = [
+            0x40, 0xA6, 0x1D, 0x08, 0x9E, 0xC9, 0xC8, 0x7F, 0x09, 0xF9, 0x8B, 0x10, 0xEC, 0x11,
+            0xEC, 0x11, 0xBB, 0x3A, 0x1D, 0x62, 0x99, 0x9D, 0xD8, 0xFF, 0xA9, 0x0C,
+        ];
         assert_eq!(data, expected);
     }
 }
