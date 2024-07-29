@@ -474,9 +474,9 @@ pub const ECC_DATA: [[[u32; 5]; 4]; 40] = [
     ],
 ];
 
-// Exponents of alpha to numbers within GF(256) (256 element galoid field)
-// Each number in GF(256) can be represented as alpha (2) raised to the power of x
-pub const GALOIS_LOG: [u8; 256] = [
+// Exponents of alpha (2) to values within the 256 element Galois Field (GF(256))
+// Each number in GF(256) can be represented as 2 raised to the power of the exponent
+pub const GALOIS_EXPONENTS: [u8; 256] = [
     1, 2, 4, 8, 16, 32, 64, 128, 29, 58, 116, 232, 205, 135, 19, 38, 76, 152, 45, 90, 180, 117,
     234, 201, 143, 3, 6, 12, 24, 48, 96, 192, 157, 39, 78, 156, 37, 74, 148, 53, 106, 212, 181,
     119, 238, 193, 159, 35, 70, 140, 5, 10, 20, 40, 80, 160, 93, 186, 105, 210, 185, 111, 222, 161,
@@ -492,8 +492,8 @@ pub const GALOIS_LOG: [u8; 256] = [
     131, 27, 54, 108, 216, 173, 71, 142, 1,
 ];
 
-// Numbers to exponents of alpha
-pub const GALOIS_ANTILOG: [u8; 256] = [
+// Values within GF(256) to exponents of alpha
+pub const GALOIS_VALUES: [u8; 256] = [
     0, 0, 1, 25, 2, 50, 26, 198, 3, 223, 51, 238, 27, 104, 199, 75, 4, 100, 224, 14, 52, 141, 239,
     129, 28, 193, 105, 248, 200, 8, 76, 113, 5, 138, 101, 47, 225, 36, 15, 33, 53, 147, 142, 218,
     240, 18, 130, 69, 29, 181, 194, 125, 106, 39, 249, 185, 201, 154, 9, 120, 77, 228, 114, 166, 6,

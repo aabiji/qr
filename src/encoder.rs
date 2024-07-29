@@ -1,9 +1,9 @@
 use crate::tables;
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
-use std::collections::VecDeque;
+use std::{collections::VecDeque, iter};
 
 #[derive(Copy, Clone, PartialEq)]
-enum ErrorCorrection {
+pub enum ErrorCorrection {
     Low = 0,      // Recovers 7% of data
     Medium = 1,   // Recovers 15% of data
     Quartile = 2, // Recovers 25% of data
@@ -276,8 +276,10 @@ fn encode_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
     bitstream.into_writer()
 }
 
-// Map the number of error correction keywords to the generator exponents of alpha
-// FIXME: ????
+// Map the number of error correction keywords to their corresponding
+// generator polynomials. The generator polynomials are represented as exponents
+// of alpha. For example, the generator polynomial for 7 error correction codes
+// would look like so: α0x7 + α87x6 + α229x5 + α146x4 + α149x3 + α238x2 + α102x + α21
 fn get_generator_polynomial(count: usize) -> VecDeque<u8> {
     match count {
         7 => VecDeque::from([87, 229, 146, 149, 238, 102, 21]),
@@ -324,22 +326,46 @@ fn get_generator_polynomial(count: usize) -> VecDeque<u8> {
 }
 
 // Use the Reed-Solomon algorithm to generate error correction codes
-// for our encoded data
+// for our encoded data. The Reed Solomon algorithm generates a bunch
+// of extra redundant data which can be used to recover the original
+// data even if parts of it are missing or corrupted
 fn generate_error_correction_codes(
     data: &Vec<u8>,
-    level: &ErrorCorrection,
+    level: ErrorCorrection,
     version: usize,
 ) -> Vec<u8> {
-    Vec::new()
+    let ecc_count = get_error_codeword_count(version, level);
+    let generator_polynomial = get_generator_polynomial(ecc_count);
+
+    // The coefficients of the message polynomial correspond to the data bytes
+    let mut message_polynomial = data.clone();
+
+    // Pad the message polynomial with the default values for
+    // the error correction codewords
+    message_polynomial.extend(iter::repeat(0).take(ecc_count));
+
+    // Divide the message polynomial by the generator polynomial
+    // The remainder will be our error correction codewords
+    for i in 0..data.len() {
+        let a = message_polynomial[i];
+        let b = tables::GALOIS_VALUES[a as usize];
+        for j in 0..generator_polynomial.len() {
+            let d = (generator_polynomial[j] as u16 + b as u16) % 255;
+            let value = tables::GALOIS_EXPONENTS[d as usize];
+            message_polynomial[i + j + 1] ^= value;
+        }
+    }
+
+    // Return the remainder
+    message_polynomial[data.len()..].to_vec()
 }
 
-/*
-pub fn assemble_qr_data(input: &str, level: &ErrorCorrection) -> Vec<u8> {
+pub fn assemble_qr_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
     let data = encode_data(input, level);
     let mode = get_encoding_mode(input);
-    let version = get_version(level, &mode, input.len());
+    let version = get_version(level, mode, input.len());
 
-    let info = tables::ECC_DATA[version - 1][correction_index(level)];
+    let info = tables::ECC_DATA[version - 1][level as usize];
     let group_block_counts = [info[1], info[3]];
     let codeword_counts = [info[2], info[4]];
 
@@ -367,7 +393,7 @@ pub fn assemble_qr_data(input: &str, level: &ErrorCorrection) -> Vec<u8> {
     ecc_groups.push(Vec::new());
     for group in 0..2 {
         for block in data_groups[group].clone() {
-            let codes = generate_error_correction_codes(&block, &level, version);
+            let codes = generate_error_correction_codes(&block, level, version);
             ecc_groups[group].push(codes);
         }
     }
@@ -399,7 +425,6 @@ pub fn assemble_qr_data(input: &str, level: &ErrorCorrection) -> Vec<u8> {
 
     interleaved_data
 }
-*/
 
 #[cfg(test)]
 mod test {
@@ -516,22 +541,40 @@ mod test {
             0x40, 0x56, 0x86, 0x56, 0xC6, 0xC6, 0xF0, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC,
             0x11, 0xEC, 0x11, 0xEC, 0x11,
         ];
-        let correction_codes = generate_error_correction_codes(&bytes, &level, version);
+        let correction_codes = generate_error_correction_codes(&bytes, level, version);
         let expected = [0x25, 0x19, 0xD0, 0xD2, 0x68, 0x59, 0x39];
+        assert_eq!(correction_codes, expected);
+
+        let level = ErrorCorrection::Medium;
+        let bytes = vec![0x10, 0x0C, 0x7B, 0x00, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11];
+        let correction_codes = generate_error_correction_codes(&bytes, level, version);
+        let expected = [0x1C, 0x53, 0xB9, 0x9F, 0x2B, 0xD5, 0xE3, 0x6D, 0x0E, 0x70];
         assert_eq!(correction_codes, expected);
     }
 
-    /*
     #[test]
     fn test_data_assembly() {
-        let input = "hello";
-        let level = &ErrorCorrection::Low;
-        let data = assemble_qr_data(input, level);
+        let data = assemble_qr_data("hello", ErrorCorrection::Low);
         let expected = [0x40, 0x56, 0x86, 0x56, 0xC6, 0xC6, 0xF0,
                                    0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11, 0xEC,
                                    0x11, 0xEC, 0x11, 0xEC, 0x11, 0x25, 0x19, 0xD0,
                                    0xD2, 0x68, 0x59, 0x39];
         assert_eq!(data, expected);
+
+        let data = assemble_qr_data("LOREM IPSUM SIT DOLOR AMED", ErrorCorrection::High);
+        let expected = [0x20, 0x61, 0xD3, 0x79, 0xC9, 0x33, 0x99, 0x8C, 0xB0, 0xEC,
+                        0x09, 0x28, 0xA1, 0x30, 0xD0, 0xEC, 0xA8, 0x11, 0x05, 0xEC,
+                        0x3F, 0x11, 0xA9, 0xEC, 0xEA, 0x11, 0x98, 0x12, 0x7A, 0x31,
+                        0x0E, 0x41, 0x36, 0x26, 0x5B, 0xDF, 0x43, 0x34, 0x0C, 0x33,
+                        0x00, 0x8B, 0x32, 0xDB, 0x28, 0x54, 0x3F, 0xE1, 0x62, 0x6C,
+                        0xDF, 0x3B, 0x08, 0x65, 0x12, 0xD0, 0x35, 0xF8, 0xF0, 0x75,
+                        0x1A, 0x77, 0x6D, 0x49, 0x01, 0x89, 0xB1, 0x79, 0xF4, 0x76];
+        assert_eq!(data, expected);
+
+        let data = assemble_qr_data("aЉ윇😱", ErrorCorrection::Medium);
+        let expected = [0x40, 0xA6, 0x1D, 0x08, 0x9E, 0xC9, 0xC8, 0x7F, 0x09, 0xF9,
+                        0x8B, 0x10, 0xEC, 0x11, 0xEC, 0x11, 0xBB, 0x3A, 0x1D, 0x62,
+                        0x99, 0x9D, 0xD8, 0xFF, 0xA9, 0x0C];
+        assert_eq!(data, expected);
     }
-    */
 }
