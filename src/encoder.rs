@@ -354,6 +354,7 @@ fn generate_error_correction_codes(
     message_polynomial[data.len()..].to_vec()
 }
 
+// NOTE: we are not adding remainder bits
 pub fn assemble_qr_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
     let data = encode_data(input, level);
     let mode = get_encoding_mode(input);
