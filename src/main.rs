@@ -5,7 +5,7 @@ mod encoder;
 mod tables;
 
 fn main() {
-    let input = "lorem ipsum sit dolor amed";
+    let input = "hello!";
     let level = encoder::ErrorCorrection::Low;
     let qr = drawer::QR::create(input, level);
 

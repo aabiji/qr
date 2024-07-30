@@ -108,5 +108,19 @@ impl QR {
     fn draw_dummy_format_areas(&mut self) {
         // Draw the dark module
         self.draw_module(8, 4 * self.version + 9, 0);
+
+        // Draw reserved areas adjacent to the finder patterns
+        self.draw_module(8, 8, 255);
+        for i in 0..8 {
+            let pos = self.size - i - 1;
+            let x_positions = [8, self.size - i - 1, i, 8];
+            let y_positions = [pos, 8, 8, i];
+
+            for j in 0..4 {
+                if self.get_module(x_positions[j], y_positions[j]) == 128 {
+                    self.draw_module(x_positions[j], y_positions[j], 255);
+                }
+            }
+        }
     }
 }
