@@ -159,7 +159,6 @@ impl QR {
         let mut x = size - 1;
         let mut y = size - 1;
         let mut going_up = true;
-        // TODO: test data encoding and make sure it actually works
         // TODO: qr codes version 7 and higher
         while self.byte_index < self.data.len() {
             // Skip the top timing pattern

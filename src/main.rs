@@ -6,7 +6,7 @@ mod tables;
 
 fn main() {
     let input = "Hello, world! 123";
-    let level = encoder::ErrorCorrection::Low; // TODO: fix panic when this is high
+    let level = encoder::ErrorCorrection::Low;
     let qr = drawer::QR::create(input, level);
 
     let pixel_size = 10;
