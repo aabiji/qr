@@ -605,3 +605,13 @@ pub fn get_alignment_pattern_locations(version: usize) -> Vec<usize> {
         _ => Vec::new(),
     }
 }
+
+// Get the required amount of remainder bits by version
+pub fn get_remainder_bit_count(version: usize) -> usize {
+    match version {
+        2..=6 => 7,
+        14..=20 | 28..=34 => 3,
+        21..=27 => 4,
+        _ => 0,
+    }
+}

@@ -9,6 +9,7 @@ pub struct QR {
     data: Vec<u8>,
     byte_index: usize,
     bit_index: usize,
+    bit_count: usize,
 }
 
 impl QR {
@@ -23,6 +24,7 @@ impl QR {
             version,
             size,
             byte_index: 0,
+            bit_count: 0,
             bit_index: 0,
         };
 
@@ -142,6 +144,11 @@ impl QR {
     }
 
     fn get_next_bit_color(&mut self) -> u8 {
+        self.bit_count += 1;
+        if self.byte_index >= self.data.len() {
+            return 255;
+        }
+
         let shifted = self.data[self.byte_index] << self.bit_index & 0x80;
         let color = if shifted == 128 { 0 } else { 255 };
 
@@ -154,13 +161,15 @@ impl QR {
         color
     }
 
+    // TODO: find a way to test this
     fn draw_data_bits(&mut self) {
         let size = self.size as i32;
         let mut x = size - 1;
         let mut y = size - 1;
         let mut going_up = true;
-        // TODO: qr codes version 7 and higher
-        while self.byte_index < self.data.len() {
+        let num_bits = self.data.len() * 8 + tables::get_remainder_bit_count(self.version);
+
+        while self.bit_count < num_bits {
             // Skip the top timing pattern
             if y == 6 && x >= 9 && x <= size - 8 {
                 y = if going_up { y - 1 } else { y + 1 };
@@ -171,23 +180,16 @@ impl QR {
                 x -= 1;
             }
 
-            let in_top_left = x < 9 && y < 9;
-            let mut in_top_right = x > size - 8 && y < 9;
-            let mut in_bottom_left = x < 9 && y > size - 9;
-            if self.version >= 7 { // Ensure we're also not in a reserved version area
-                in_bottom_left = in_bottom_left && !(x < 6 && y > size - 12);
-                in_top_right = in_top_right && !(x > size - 11 && x < size - 9 && y < 6);
+            // Draw on the right side if we can
+            if self.get_module(x as usize, y as usize) == 128 {
+                let c = self.get_next_bit_color();
+                self.draw_module(x as usize, y as usize, c);
             }
 
-            // Draw the data bits, skipping the finder patterns
-            let can_draw = !in_bottom_left && !in_top_left && !in_top_right;
-            // TODO: why can't we do this??
-            //let can_draw = self.get_module(x as usize, y as usize) == 128;
-            if can_draw {
-                let right = self.get_next_bit_color();
-                let left = self.get_next_bit_color();
-                self.draw_module(x as usize, y as usize, right);
-                self.draw_module((x - 1) as usize, y as usize, left);
+            // Draw on the left side if we can
+            if x > 0 && self.get_module((x - 1) as usize, y as usize) == 128 {
+                let c = self.get_next_bit_color();
+                self.draw_module((x - 1) as usize, y as usize, c);
             }
 
             // Go up and down

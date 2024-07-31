@@ -52,23 +52,23 @@ fn alphanumeric_value(codepoint: char) -> u16 {
 }
 
 pub fn get_encoding_mode(input: &str) -> EncodingMode {
-    let mut num_indexes = Vec::new();
-    let mut alpha_indexes = Vec::new();
+    let mut num_count = 0;
+    let mut alpha_count = 0;
 
     for codepoint in input.chars() {
         if codepoint.is_ascii_digit() {
-            num_indexes.push(0);
+            num_count += 1;
         }
         if is_alphanumeric(codepoint) {
-            alpha_indexes.push(0);
+            alpha_count += 1;
         }
     }
 
     if input.len() == 0 {
         return EncodingMode::Byte;
-    } else if num_indexes.len() == input.len() {
+    } else if num_count == input.len() {
         return EncodingMode::Numeric;
-    } else if alpha_indexes.len() == input.len() {
+    } else if alpha_count == input.len() {
         return EncodingMode::Alphanumeric;
     }
 
@@ -312,7 +312,6 @@ fn generate_error_correction_codes(
 }
 
 /// Encode data, generate error correction codes and interleave to get the final qr data
-// NOTE: we are not adding remainder bits
 pub fn assemble_qr_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
     let data = encode_data(input, level);
     let mode = get_encoding_mode(input);

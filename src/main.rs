@@ -5,11 +5,12 @@ mod encoder;
 mod tables;
 
 fn main() {
+    //let input: String = std::iter::repeat("Hello, world! 123").take(5).collect();
     let input = "Hello, world! 123";
     let level = encoder::ErrorCorrection::Low;
     let qr = drawer::QR::create(input, level);
 
-    let pixel_size = 10;
+    let pixel_size = 12;
     let size = qr.size as u32 * pixel_size;
     let mut img = image::ImageBuffer::new(size, size);
 
