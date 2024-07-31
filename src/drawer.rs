@@ -4,8 +4,11 @@ use crate::tables;
 pub struct QR {
     pub size: usize,
     pub matrix: Vec<u8>,
-    data: Vec<u8>,
     version: usize,
+
+    data: Vec<u8>,
+    byte_index: usize,
+    bit_index: usize,
 }
 
 impl QR {
@@ -19,10 +22,13 @@ impl QR {
             matrix: vec![128; size * size],
             version,
             size,
+            byte_index: 0,
+            bit_index: 0,
         };
 
         qr.draw_patterns();
         qr.draw_dummy_format_areas();
+        qr.draw_data_bits();
         qr
     }
 
@@ -120,6 +126,77 @@ impl QR {
                 if self.get_module(x_positions[j], y_positions[j]) == 128 {
                     self.draw_module(x_positions[j], y_positions[j], 255);
                 }
+            }
+        }
+
+        // Draw reserved version info areas for qr versions 7 or higher
+        if self.version < 7 {
+            return;
+        }
+        for i in 0..6 {
+            for j in 0..3 {
+                self.draw_module(i, self.size - 9 - j, 255);
+                self.draw_module(self.size - 9 - j, i, 255);
+            }
+        }
+    }
+
+    fn get_next_bit_color(&mut self) -> u8 {
+        let shifted = self.data[self.byte_index] << self.bit_index & 0x80;
+        let color = if shifted == 128 { 0 } else { 255 };
+
+        self.bit_index += 1;
+        if self.bit_index == 8 {
+            self.byte_index += 1;
+            self.bit_index = 0;
+        }
+
+        color
+    }
+
+    fn draw_data_bits(&mut self) {
+        let size = self.size as i32;
+        let mut x = size - 1;
+        let mut y = size - 1;
+        let mut going_up = true;
+        // TODO: test data encoding and make sure it actually works
+        // TODO: qr codes version 7 and higher
+        while self.byte_index < self.data.len() {
+            // Skip the top timing pattern
+            if y == 6 && x >= 9 && x <= size - 8 {
+                y = if going_up { y - 1 } else { y + 1 };
+            }
+
+            // Skip the side timing pattern
+            if x == 6 && y >= 9 && y <= size - 8 {
+                x -= 1;
+            }
+
+            let in_top_left = x < 9 && y < 9;
+            let mut in_top_right = x > size - 8 && y < 9;
+            let mut in_bottom_left = x < 9 && y > size - 9;
+            if self.version >= 7 { // Ensure we're also not in a reserved version area
+                in_bottom_left = in_bottom_left && !(x < 6 && y > size - 12);
+                in_top_right = in_top_right && !(x > size - 11 && x < size - 9 && y < 6);
+            }
+
+            // Draw the data bits, skipping the finder patterns
+            let can_draw = !in_bottom_left && !in_top_left && !in_top_right;
+            // TODO: why can't we do this??
+            //let can_draw = self.get_module(x as usize, y as usize) == 128;
+            if can_draw {
+                let right = self.get_next_bit_color();
+                let left = self.get_next_bit_color();
+                self.draw_module(x as usize, y as usize, right);
+                self.draw_module((x - 1) as usize, y as usize, left);
+            }
+
+            // Go up and down
+            y = if going_up { y - 1 } else { y + 1 };
+            if y == -1 || y == size {
+                y = if y == -1 { 0 } else { size - 1 };
+                going_up = !going_up;
+                x -= 2;
             }
         }
     }
