@@ -5,9 +5,8 @@ mod encoder;
 mod tables;
 
 fn main() {
-    //let input: String = std::iter::repeat("Hello, world! 123").take(5).collect();
-    let input = "Hello, world! 123";
-    let level = encoder::ErrorCorrection::Low;
+    let input = "Lorem ipsum sit dolor amed.Lorem ipsum sit dolor amed.Lorem ipsum sit dolor amed.";
+    let level = encoder::ErrorCorrection::High;
     let qr = drawer::QR::create(input, level);
 
     let pixel_size = 12;

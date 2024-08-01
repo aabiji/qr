@@ -30,6 +30,7 @@ impl QR {
 
         qr.draw_patterns();
         qr.draw_dummy_format_areas();
+        qr.draw_version_info();
         qr.draw_data_bits();
         qr
     }
@@ -130,15 +131,21 @@ impl QR {
                 }
             }
         }
+    }
 
-        // Draw reserved version info areas for qr versions 7 or higher
+    fn draw_version_info(&mut self) {
         if self.version < 7 {
             return;
         }
-        for i in 0..6 {
-            for j in 0..3 {
-                self.draw_module(i, self.size - 9 - j, 255);
-                self.draw_module(self.size - 9 - j, i, 255);
+
+        let bitstring = tables::get_version_bitstring(self.version);
+        let mut index = 0;
+        for x in 0..6 {
+            for y in 0..3 {
+                let color = if bitstring[index] == 0 { 255 } else { 0 };
+                self.draw_module(5 - x, self.size - 9 - y, color);
+                self.draw_module(self.size - 9 - y, 5 - x, color);
+                index += 1;
             }
         }
     }
@@ -161,7 +168,6 @@ impl QR {
         color
     }
 
-    // TODO: find a way to test this
     fn draw_data_bits(&mut self) {
         let size = self.size as i32;
         let mut x = size - 1;
