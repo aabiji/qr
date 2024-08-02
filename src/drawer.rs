@@ -4,12 +4,13 @@ use crate::tables;
 pub struct QR {
     pub size: usize,
     pub matrix: Vec<u8>,
-    version: usize,
 
+    matrix_copy: Vec<u8>,
+    version: usize,
+    level: encoder::ErrorCorrection,
     data: Vec<u8>,
     byte_index: usize,
     bit_index: usize,
-    bit_count: usize,
 }
 
 impl QR {
@@ -19,19 +20,20 @@ impl QR {
 
         let size = 21 + (version - 1) * 4;
         let mut qr = Self {
+            byte_index: 0,
+            bit_index: 0,
             data: encoder::assemble_qr_data(input, level),
             matrix: vec![128; size * size],
+            matrix_copy: vec![128; size * size],
             version,
             size,
-            byte_index: 0,
-            bit_count: 0,
-            bit_index: 0,
+            level,
         };
 
-        qr.draw_patterns();
+        qr.draw_initial_patterns();
         qr.draw_dummy_format_areas();
         qr.draw_version_info();
-        qr.draw_data_bits();
+        qr.draw_data();
         qr
     }
 
@@ -98,7 +100,7 @@ impl QR {
         }
     }
 
-    fn draw_patterns(&mut self) {
+    fn draw_initial_patterns(&mut self) {
         // Draw horizantal and vertical timing patterns
         for i in 0..self.size {
             let color = if i % 2 == 0 { 0 } else { 255 };
@@ -150,14 +152,39 @@ impl QR {
         }
     }
 
-    fn get_next_bit_color(&mut self) -> u8 {
-        self.bit_count += 1;
-        if self.byte_index >= self.data.len() {
+    fn get_color(&self, bit: u8) -> u8 {
+        if bit == 0 {
             return 255;
+        }
+        0
+    }
+
+    fn draw_format_info(&mut self, mask_index: usize) {
+        let mut x = 0;
+        let mut y = (self.size - 1) as i32;
+        let bits = tables::FORMAT_INFO_BITS[self.level as usize][mask_index];
+
+        self.draw_module(self.size - 8, 8, self.get_color(bits[7]));
+        for i in 0..15 {
+            // Draw vertically
+            self.draw_module(8, y as usize, self.get_color(bits[i]));
+            y = if i == 6 { 8 } else { y - 1 }; // Skip middle vertical gap
+            y = if y == 6 { 5 } else { y }; // Skip timing pattern
+
+            // Draw horizantally
+            self.draw_module(x, 8, self.get_color(bits[i]));
+            x = if i == 7 { self.size - 7 } else { x + 1 }; // Skip middle horizantal gap
+            x = if x == 6 { 7 } else { x }; // Skip timing pattern
+        }
+    }
+
+    fn get_next_bit(&mut self) -> u8 {
+        if self.byte_index >= self.data.len() {
+            return 0;
         }
 
         let shifted = self.data[self.byte_index] << self.bit_index & 0x80;
-        let color = if shifted == 128 { 0 } else { 255 };
+        let bit = if shifted == 128 { 1 } else { 0 };
 
         self.bit_index += 1;
         if self.bit_index == 8 {
@@ -165,17 +192,32 @@ impl QR {
             self.bit_index = 0;
         }
 
-        color
+        bit
     }
 
-    fn draw_data_bits(&mut self) {
+    // Return 1 if the mask applies else 0
+    fn get_mask_rule(&self, x: usize, y: usize, mask_index: usize) -> u8 {
+        u8::from(match mask_index {
+            0 => (x + y) % 2 == 0,
+            1 => y % 2 == 0,
+            2 => x % 3 == 0,
+            3 => (x + y) % 3 == 0,
+            4 => (((y as f64) / 2.0).floor() + ((x as f64) / 3.0).floor()) % 2.0 == 0.0,
+            5 => (((x * y) % 2) + ((x * y) % 3)) == 0,
+            6 => (((x * y) % 2) + ((x * y) % 3)) % 2 == 0,
+            7 => (((x + y) % 2) + ((x * y) % 3)) % 2 == 0,
+            _ => false,
+        })
+    }
+
+    fn draw_and_mask_data_bits(&mut self, mask_index: usize) {
         let size = self.size as i32;
         let mut x = size - 1;
         let mut y = size - 1;
         let mut going_up = true;
         let num_bits = self.data.len() * 8 + tables::get_remainder_bit_count(self.version);
 
-        while self.bit_count < num_bits {
+        while x > 0 {
             // Skip the top timing pattern
             if y == 6 && x >= 9 && x <= size - 8 {
                 y = if going_up { y - 1 } else { y + 1 };
@@ -186,16 +228,14 @@ impl QR {
                 x -= 1;
             }
 
-            // Draw on the right side if we can
-            if self.get_module(x as usize, y as usize) == 128 {
-                let c = self.get_next_bit_color();
-                self.draw_module(x as usize, y as usize, c);
-            }
-
-            // Draw on the left side if we can
-            if x > 0 && self.get_module((x - 1) as usize, y as usize) == 128 {
-                let c = self.get_next_bit_color();
-                self.draw_module((x - 1) as usize, y as usize, c);
+            // Draw right to left
+            for i in 0..2 {
+                let p = x - i;
+                if p >= 0 && self.get_module(p as usize, y as usize) == 128 {
+                    let mask = self.get_mask_rule(p as usize, y as usize, mask_index);
+                    let bit = self.get_next_bit() ^ mask;
+                    self.draw_module(p as usize, y as usize, self.get_color(bit));
+                }
             }
 
             // Go up and down
@@ -205,6 +245,21 @@ impl QR {
                 going_up = !going_up;
                 x -= 2;
             }
+        }
+    }
+
+    fn compute_penalty_score(&mut self) {
+        todo!("implement penalty rules!");
+    }
+
+    fn draw_data(&mut self) {
+        self.matrix_copy = self.matrix.clone();
+        for mask in 0..8 {
+            self.matrix = self.matrix_copy.clone();
+            self.draw_and_mask_data_bits(mask);
+            self.draw_format_info(mask);
+            self.compute_penalty_score();
+            break;
         }
     }
 }
