@@ -35,7 +35,13 @@ impl QR {
         qr
     }
 
-    fn draw_module(&mut self, x: usize, y: usize, color: u8) {
+    fn reset(&mut self, matrix_copy: &Vec<u8>) {
+        self.matrix = matrix_copy.clone();
+        self.byte_index = 0;
+        self.bit_index = 0;
+    }
+
+    fn set_module(&mut self, x: usize, y: usize, color: u8) {
         self.matrix[y * self.size + x] = color;
     }
 
@@ -50,8 +56,8 @@ impl QR {
         let separator_x = if is_right { 0 } else { 7 };
         let separator_y = if is_bottom { 0 } else { 7 };
         for i in 0..8 {
-            self.draw_module(startx + i, starty + separator_y, 255);
-            self.draw_module(startx + separator_x, starty + i, 255);
+            self.set_module(startx + i, starty + separator_y, 255);
+            self.set_module(startx + separator_x, starty + i, 255);
         }
 
         // Draw finder pattern
@@ -62,7 +68,7 @@ impl QR {
                 let color = if is_border || is_inner { 0 } else { 255 };
                 let real_x = startx + x + usize::from(is_right);
                 let real_y = starty + y + usize::from(is_bottom);
-                self.draw_module(real_x, real_y, color);
+                self.set_module(real_x, real_y, color);
             }
         }
     }
@@ -91,7 +97,7 @@ impl QR {
                         let y = (cy - 2) + i;
                         let is_center = x == cx && y == cy;
                         let is_border = i == 0 || i == 4 || j == 0 || j == 4;
-                        self.draw_module(x, y, if is_border || is_center { 0 } else { 255 });
+                        self.set_module(x, y, if is_border || is_center { 0 } else { 255 });
                     }
                 }
             }
@@ -102,8 +108,8 @@ impl QR {
         // Draw horizantal and vertical timing patterns
         for i in 0..self.size {
             let color = if i % 2 == 0 { 0 } else { 255 };
-            self.draw_module(i, 6, color);
-            self.draw_module(6, i, color);
+            self.set_module(i, 6, color);
+            self.set_module(6, i, color);
         }
 
         self.draw_alignment_patterns();
@@ -116,10 +122,10 @@ impl QR {
 
     fn draw_dummy_format_areas(&mut self) {
         // Draw the dark module
-        self.draw_module(8, 4 * self.version + 9, 0);
+        self.set_module(8, 4 * self.version + 9, 0);
 
         // Draw reserved areas adjacent to the finder patterns
-        self.draw_module(8, 8, 255);
+        self.set_module(8, 8, 255);
         for i in 0..8 {
             let pos = self.size - i - 1;
             let x_positions = [8, self.size - i - 1, i, 8];
@@ -127,7 +133,7 @@ impl QR {
 
             for j in 0..4 {
                 if self.get_module(x_positions[j], y_positions[j]) == 128 {
-                    self.draw_module(x_positions[j], y_positions[j], 255);
+                    self.set_module(x_positions[j], y_positions[j], 255);
                 }
             }
         }
@@ -143,8 +149,8 @@ impl QR {
         for x in 0..6 {
             for y in 0..3 {
                 let color = if bitstring[index] == 0 { 255 } else { 0 };
-                self.draw_module(5 - x, self.size - 9 - y, color);
-                self.draw_module(self.size - 9 - y, 5 - x, color);
+                self.set_module(5 - x, self.size - 9 - y, color);
+                self.set_module(self.size - 9 - y, 5 - x, color);
                 index += 1;
             }
         }
@@ -162,15 +168,15 @@ impl QR {
         let mut y = (self.size - 1) as i32;
         let bits = tables::FORMAT_INFO_BITS[self.level as usize][mask_index];
 
-        self.draw_module(self.size - 8, 8, self.get_color(bits[7]));
+        self.set_module(self.size - 8, 8, self.get_color(bits[7]));
         for i in 0..15 {
             // Draw vertically
-            self.draw_module(8, y as usize, self.get_color(bits[i]));
+            self.set_module(8, y as usize, self.get_color(bits[i]));
             y = if i == 6 { 8 } else { y - 1 }; // Skip middle vertical gap
             y = if y == 6 { 5 } else { y }; // Skip timing pattern
 
             // Draw horizantally
-            self.draw_module(x, 8, self.get_color(bits[i]));
+            self.set_module(x, 8, self.get_color(bits[i]));
             x = if i == 7 { self.size - 7 } else { x + 1 }; // Skip middle horizantal gap
             x = if x == 6 { 7 } else { x }; // Skip timing pattern
         }
@@ -232,7 +238,7 @@ impl QR {
                 if p >= 0 && self.get_module(p as usize, y as usize) == 128 {
                     let mask = self.get_mask_rule(p as usize, y as usize, mask_index);
                     let bit = self.get_next_bit() ^ mask;
-                    self.draw_module(p as usize, y as usize, self.get_color(bit));
+                    self.set_module(p as usize, y as usize, self.get_color(bit));
                 }
             }
 
@@ -247,7 +253,7 @@ impl QR {
     }
 
     // Calculate the penalty for horizantal and vertical 5 module or longer runs
-    fn compute_run_penalty(&self) -> u32 {
+    fn get_run_penalty(&self) -> u32 {
         let mut penalty = 0;
         for y in 0..self.size {
             let mut x_streak = 0;
@@ -275,7 +281,8 @@ impl QR {
         penalty
     }
 
-    fn compute_block_penalty(&self) -> u32 {
+    // Penalize 2x2 blocks of the same color
+    fn get_block_penalty(&self) -> u32 {
         let mut penalty = 0;
         for y in 0..self.size {
             for x in 0..self.size {
@@ -294,30 +301,73 @@ impl QR {
         penalty
     }
 
-    fn compute_finder_penalty(&self) -> u32 {
+    // Penalize horizantal and vertical 12 module runs that ressemble
+    // finder pattern
+    fn get_finder_penalty(&self) -> u32 {
+        let pattern1 = [255, 0, 255, 0, 0, 0, 255, 0, 255, 255, 255, 255];
+        let pattern2 = [255, 255, 255, 255, 0, 255, 0, 0, 0, 255, 0, 255];
+
         let mut penalty = 0;
-        let pattern = [0, 255, 0, 0, 0, 255, 0, 255, 255, 255, 255];
+        for y in 0..self.size {
+            for offset in 0..self.size + 22 {
+                let mut row = [255; 12];
+                let mut col = [255; 12];
+                for i in 0..12 {
+                    let x = -11 + offset as i32 + i as i32;
+                    if x >= 0 && x < self.size as i32 {
+                        row[i] = self.get_module(x as usize, y);
+                        col[i] = self.get_module(y, x as usize);
+                    }
+                }
+
+                penalty += u32::from(row == pattern1 || row == pattern2) * 40;
+                penalty += u32::from(col == pattern1 || col == pattern2) * 40;
+            }
+        }
+
         penalty
     }
 
+    fn get_ratio_penalty(&self) -> u32 {
+        let total_modules = self.size * self.size;
+        let dark_count = self.matrix.iter().filter(|&n| *n == 0).count();
+        let dark_percentage = (dark_count as f64 / total_modules as f64) * 100.0;
+
+        let previous_multiple = dark_percentage - (dark_percentage % 5.0);
+        let next_multiple = previous_multiple + 5.0;
+
+        let previous = (f64::abs(previous_multiple - 50.0) / 5.0) as u32;
+        let next = (f64::abs(next_multiple - 50.0) / 5.0) as u32;
+
+        std::cmp::min(previous, next) * 10
+    }
+
+    // TODO: test this
+    // Draw the qr data with the most optimal mask
     fn draw_data(&mut self) {
         let matrix_copy = self.matrix.clone();
-        let mut scores = [0; 8]; // TODO: test this
 
-        for mask in 0..8 {
-            self.matrix = matrix_copy.clone();
-            self.byte_index = 0;
-            self.bit_index = 0;
+        // Find the mask pattern that yields the lowest penalty score
+        let mut min = u32::MAX;
+        let mut mask_to_use = 0;
+        let mut scores = [0; 8];
+        for i in 0..8 {
+            self.reset(&matrix_copy);
+            self.draw_and_mask_data_bits(i);
+            self.draw_format_info(i);
 
-            self.draw_and_mask_data_bits(mask);
-            self.draw_format_info(mask);
-
-            let a = self.compute_run_penalty();
-            let b = self.compute_block_penalty();
-            let c = self.compute_finder_penalty();
-            scores[mask] = c; //a + b;
+            scores[i] = self.get_run_penalty()
+                + self.get_ratio_penalty()
+                + self.get_block_penalty()
+                + self.get_finder_penalty();
+            if scores[i] < min {
+                min = scores[i];
+                mask_to_use = i;
+            }
         }
 
-        println!("{:?}", scores);
+        self.reset(&matrix_copy);
+        self.draw_and_mask_data_bits(mask_to_use);
+        self.draw_format_info(mask_to_use);
     }
 }
