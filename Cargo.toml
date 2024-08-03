@@ -2,7 +2,16 @@
 name = "qr"
 version = "0.1.0"
 edition = "2021"
+authors = ["Abigail Adegbiji <adegbijiabigail@gmail.com>"]
 
 [dependencies]
 bitstream-io = "2.5.0"
-image = { version = "0.25.2", features = ["png"], default-features=false }
+image = "0.25.2"
+
+[lib]
+name = "qrgen"
+path = "src/lib.rs"
+
+[[bin]]
+name = "qr"
+path = "src/main.rs"

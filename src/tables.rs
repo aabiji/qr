@@ -1,5 +1,3 @@
-use std::collections::VecDeque;
-
 // Character capacities (number of characters the qr code can fit)
 // Index by version, then by error correction level, then by encoding mode
 pub const CHARACTER_CAPACITIES: [[[u16; 3]; 4]; 40] = [
@@ -604,15 +602,5 @@ pub fn get_version_bitstring(version: usize) -> [u8; 18] {
         39 => [1, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1],
         40 => [1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1],
         _ => [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    }
-}
-
-// Get the required amount of remainder bits by version
-pub fn get_remainder_bit_count(version: usize) -> usize {
-    match version {
-        2..=6 => 7,
-        14..=20 | 28..=34 => 3,
-        21..=27 => 4,
-        _ => 0,
     }
 }

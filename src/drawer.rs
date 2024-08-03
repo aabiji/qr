@@ -219,7 +219,6 @@ impl QR {
         let mut x = size - 1;
         let mut y = size - 1;
         let mut going_up = true;
-        let num_bits = self.data.len() * 8 + tables::get_remainder_bit_count(self.version);
 
         while x > 0 {
             // Skip the top timing pattern
@@ -342,7 +341,6 @@ impl QR {
         std::cmp::min(previous, next) * 10
     }
 
-    // TODO: test this
     // Draw the qr data with the most optimal mask
     fn draw_data(&mut self) {
         let matrix_copy = self.matrix.clone();

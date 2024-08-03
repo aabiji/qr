@@ -1,6 +1,5 @@
 use crate::tables;
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
-use std::{collections::VecDeque, iter};
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum ErrorCorrection {
@@ -86,13 +85,6 @@ pub fn get_version(level: ErrorCorrection, mode: EncodingMode, num_chars: usize)
         version += 1;
     }
     version
-}
-
-fn create_bitstream<T: bitstream_io::Numeric>(bits: u32, value: T) -> Vec<u8> {
-    let mut writer = BitWriter::endian(Vec::new(), BigEndian);
-    writer.write(bits, value).unwrap();
-    writer.byte_align().unwrap();
-    writer.into_writer()
 }
 
 struct EncodedData {
@@ -233,8 +225,8 @@ fn encode_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
     let terminator_size = std::cmp::min(required_size - temp_length, 4);
 
     // Write mode and count bits
-    bitstream.write(mode_size, mode_indicator);
-    bitstream.write(count_bit_size, input.len() as u32);
+    bitstream.write(mode_size, mode_indicator).unwrap();
+    bitstream.write(count_bit_size, input.len() as u32).unwrap();
 
     // Write the correct amount of data in bits to the bitstream
     let mut size = encoded_data.size_in_bits;
@@ -246,13 +238,13 @@ fn encode_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
             // remaining bits to their least significant positions
             byte >>= 8 - bits;
         }
-        bitstream.write(bits, byte);
+        bitstream.write(bits, byte).unwrap();
         if size > 8 {
             size -= 8;
         }
     }
 
-    bitstream.write(terminator_size, 0);
+    bitstream.write(terminator_size, 0).unwrap();
 
     // Pad with zeroes to make the bitstream's size in bits a multiple of 8
     let mut length_in_bits =
@@ -261,7 +253,7 @@ fn encode_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
         let next_mutliple = length_in_bits / 8 * 8 + 8;
         let remaining = next_mutliple - length_in_bits;
         for _ in 0..remaining {
-            bitstream.write_bit(false);
+            bitstream.write_bit(false).unwrap();
             length_in_bits += 1;
         }
     }
@@ -270,9 +262,9 @@ fn encode_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
     let remaining_bytes = (required_size - length_in_bits) / 8;
     for i in 0..remaining_bytes {
         if i % 2 == 0 {
-            bitstream.write(8, 236);
+            bitstream.write(8, 236).unwrap();
         } else {
-            bitstream.write(8, 17);
+            bitstream.write(8, 17).unwrap();
         }
     }
 
@@ -384,9 +376,14 @@ pub fn assemble_qr_data(input: &str, level: ErrorCorrection) -> Vec<u8> {
 
 #[cfg(test)]
 mod test {
-    use bitstream_io::BigEndian;
-
     use crate::encoder::*;
+
+    fn create_bitstream<T: bitstream_io::Numeric>(bits: u32, value: T) -> Vec<u8> {
+        let mut writer = BitWriter::endian(Vec::new(), BigEndian);
+        writer.write(bits, value).unwrap();
+        writer.byte_align().unwrap();
+        writer.into_writer()
+    }
 
     #[test]
     fn test_data_analyzing() {
@@ -546,7 +543,7 @@ mod test {
         ];
         assert_eq!(data, expected);
 
-        let input: String = iter::repeat("Hello, world! 123").take(5).collect();
+        let input: String = std::iter::repeat("Hello, world! 123").take(5).collect();
         let data = assemble_qr_data(input.as_str(), ErrorCorrection::High);
         let expected = [
             0x45, 0xC6, 0xC2, 0x86, 0x12, 0xF7, 0xF2, 0xEC, 0x54, 0x42, 0x07, 0x56, 0x03, 0x26,
