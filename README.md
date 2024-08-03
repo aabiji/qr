@@ -1,4 +1,4 @@
-A qr generator writting in Rust. QR codes encode data into a image that can be scanned.
+A qr generator written in Rust. QR codes encode data into a image that can be scanned.
 The generator works and is also well tested. This crate is split into library (`qrgen`)
 and binary (`qr`) modules. To run, simply use `cargo run`.
 
