@@ -5,7 +5,6 @@ pub struct QR {
     pub size: usize,
     pub matrix: Vec<u8>,
 
-    matrix_copy: Vec<u8>,
     version: usize,
     level: encoder::ErrorCorrection,
     data: Vec<u8>,
@@ -24,7 +23,6 @@ impl QR {
             bit_index: 0,
             data: encoder::assemble_qr_data(input, level),
             matrix: vec![128; size * size],
-            matrix_copy: vec![128; size * size],
             version,
             size,
             level,
@@ -248,18 +246,78 @@ impl QR {
         }
     }
 
-    fn compute_penalty_score(&mut self) {
-        todo!("implement penalty rules!");
+    // Calculate the penalty for horizantal and vertical 5 module or longer runs
+    fn compute_run_penalty(&self) -> u32 {
+        let mut penalty = 0;
+        for y in 0..self.size {
+            let mut x_streak = 0;
+            let mut y_streak = 0;
+            for x in 0..self.size {
+                x_streak += 1;
+                let same = x + 1 < self.size && self.get_module(x, y) == self.get_module(x + 1, y);
+                if !same {
+                    if x_streak >= 5 {
+                        penalty += 3 + (x_streak - 5);
+                    }
+                    x_streak = 0;
+                }
+
+                y_streak += 1;
+                let same = x + 1 < self.size && self.get_module(y, x) == self.get_module(y, x + 1);
+                if !same {
+                    if y_streak >= 5 {
+                        penalty += 3 + (y_streak - 5);
+                    }
+                    y_streak = 0;
+                }
+            }
+        }
+        penalty
+    }
+
+    fn compute_block_penalty(&self) -> u32 {
+        let mut penalty = 0;
+        for y in 0..self.size {
+            for x in 0..self.size {
+                let in_bounds = x + 1 < self.size && y + 1 < self.size;
+                if in_bounds {
+                    let a = self.get_module(x, y);
+                    let b = self.get_module(x + 1, y);
+                    let c = self.get_module(x, y + 1);
+                    let d = self.get_module(x + 1, y + 1);
+                    if a == b && b == c && c == d {
+                        penalty += 3;
+                    }
+                }
+            }
+        }
+        penalty
+    }
+
+    fn compute_finder_penalty(&self) -> u32 {
+        let mut penalty = 0;
+        let pattern = [0, 255, 0, 0, 0, 255, 0, 255, 255, 255, 255];
+        penalty
     }
 
     fn draw_data(&mut self) {
-        self.matrix_copy = self.matrix.clone();
+        let matrix_copy = self.matrix.clone();
+        let mut scores = [0; 8]; // TODO: test this
+
         for mask in 0..8 {
-            self.matrix = self.matrix_copy.clone();
+            self.matrix = matrix_copy.clone();
+            self.byte_index = 0;
+            self.bit_index = 0;
+
             self.draw_and_mask_data_bits(mask);
             self.draw_format_info(mask);
-            self.compute_penalty_score();
-            break;
+
+            let a = self.compute_run_penalty();
+            let b = self.compute_block_penalty();
+            let c = self.compute_finder_penalty();
+            scores[mask] = c; //a + b;
         }
+
+        println!("{:?}", scores);
     }
 }
